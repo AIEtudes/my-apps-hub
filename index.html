@@ -100,7 +100,7 @@
 
     <section class="flex-grow space-y-6">
       
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-800">
+      <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-800">
         <div class="relative flex-grow max-w-md">
           <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">🔍</span>
           <input 
@@ -110,12 +110,19 @@
             class="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition text-sm"
           >
         </div>
+        
+        <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs text-slate-400">
+          <button id="type-filter-all" onclick="setTypeFilter('all')" class="px-3 py-1.5 rounded-md font-medium bg-slate-800 text-white transition">全部</button>
+          <button id="type-filter-static" onclick="setTypeFilter('static')" class="px-3 py-1.5 rounded-md font-medium hover:text-slate-200 transition">📁 靜態網頁</button>
+          <button id="type-filter-external" onclick="setTypeFilter('external')" class="px-3 py-1.5 rounded-md font-medium hover:text-slate-200 transition">🌐 AI / 外部傳送門</button>
+        </div>
+
         <div class="flex items-center space-x-2 text-xs text-slate-400 shrink-0">
-          <span>目前顯示了</span>
+          <span>顯示</span>
           <span id="filtered-count" class="font-bold text-indigo-400 text-sm">0</span>
           <span>/</span>
           <span id="total-count">0</span>
-          <span>個小程式</span>
+          <span>個專案</span>
         </div>
       </div>
 
@@ -142,7 +149,7 @@
 
   <footer class="border-t border-slate-800 bg-slate-950 py-6 text-center text-xs mt-auto space-y-3">
     <div class="flex flex-wrap justify-center items-center gap-x-5 gap-y-1.5 text-slate-400 font-medium">
-      <span class="bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">🤖 版本資訊：v1.5.0</span>
+      <span class="bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">🤖 版本資訊：v1.6.0</span>
       <span class="bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">🎹 製作: AI練習曲</span>
       <span class="bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800 text-amber-500/90">🔒 歡迎分享，請勿商用</span>
       <span class="bg-indigo-950/60 px-2.5 py-1 rounded-md border border-indigo-900/50 text-indigo-300 font-bold tracking-wide">📅 Updated: Jun,12, 2026</span>
@@ -202,29 +209,18 @@
                   進入專案倉庫上方的 <strong class="text-indigo-400">⚙️ Settings (設定)</strong> ➔ 點擊左側選單的 <strong class="text-white">Pages</strong>。
                   在 <strong class="text-white">Branch (分支)</strong> 選項中，將來源設定為 <code class="px-1.5 py-0.5 bg-slate-950 text-indigo-400 rounded">main</code> (或 <code class="px-1.5 py-0.5 bg-slate-950 text-indigo-400 rounded">master</code>)，資料夾設定為 <code class="px-1.5 py-0.5 bg-slate-950 text-indigo-400 rounded">/ (root)</code>，點擊右側的 <strong class="text-indigo-400">Save</strong>。
                 </p>
-                <div class="bg-indigo-950/40 border border-indigo-800/30 p-3 rounded-lg text-xs mt-2 text-indigo-300">
-                  💡 儲存後稍等 1-2 分鐘，重新整理 Pages 設定頁，最上方就會出現您的專屬網址！(例如: <code class="underline">https://yourname.github.io/my-apps-hub/</code>)
-                </div>
               </div>
             </div>
 
             <div class="flex gap-4">
               <span class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-950 border border-indigo-500/50 text-indigo-400 font-bold shrink-0">4</span>
               <div>
-                <h4 class="font-bold text-white text-base">上傳您的小程式</h4>
+                <h4 class="font-bold text-white text-base">上傳您的小程式 ＆ 設定傳送門</h4>
                 <p class="text-slate-400 mt-1">
-                  點擊 <strong class="text-indigo-400">Add file ➔ Create new file</strong>。
-                  在檔名輸入框輸入路徑：<code class="px-1.5 py-0.5 bg-slate-950 text-emerald-400 rounded">apps/sudoku/index.html</code> （當您輸入斜線時 GitHub 會自動建立資料夾）。將您寫好的數獨小程式貼入並 Commit 存檔。
+                  如果是靜態小程式，在檔名輸入路徑：<code class="px-1.5 py-0.5 bg-slate-950 text-emerald-400 rounded">apps/sudoku/index.html</code> 並貼上程式。
+                  如果是<b>不支援在 GitHub 執行的 React/AI 後端網頁</b>，請將它們部署到外部（如 Vercel），並開啟本站管理模式，新增時選擇「外部傳送門」，填入其網址即可連結！
                 </p>
               </div>
-            </div>
-          </div>
-
-          <div class="border-t border-slate-700 pt-4">
-            <h4 class="font-bold text-white mb-2 flex items-center gap-1">🚫 常見小白疑難排解 (FAQ)</h4>
-            <div class="space-y-3 text-xs text-slate-400 bg-slate-900/60 p-4 rounded-xl">
-              <p><strong class="text-rose-400">Q：為什麼我更新了程式，網頁卻還是顯示舊的？</strong><br>A：這通常是瀏覽器快取。請按下鍵盤 <code class="px-1 bg-slate-800 rounded">Ctrl+F5</code> (Mac 使用 <code class="px-1 bg-slate-800 rounded">Cmd+Shift+R</code>) 強制重新整理，或使用無痕模式開啟。</p>
-              <p><strong class="text-rose-400">Q：開啟小程式時出現 404 找不到檔案？</strong><br>A：請確認您在下一個分頁設定的 <code class="text-emerald-400">url</code> 與您在 GitHub 上實際儲存的資料夾/檔名大小寫完全一致。記得使用相對路徑，如：<code class="text-slate-300">apps/sudoku/index.html</code>。</p>
             </div>
           </div>
         </div>
@@ -242,13 +238,6 @@
                 <li>直接在畫面上點擊各處的 <span class="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">➕ 新增</span> 或卡片上的 <span class="bg-slate-700 px-1 py-0.5 rounded">✏️ 編輯</span> 按鈕來變更設定。</li>
                 <li>修改完畢後，點擊頂端橫幅或最下方的 <strong class="text-emerald-400">💾 儲存並匯出最新 HTML 程式碼</strong>。</li>
               </ol>
-            </div>
-
-            <div class="space-y-2">
-              <h4 class="font-bold text-white text-sm">3. 關於手動備份或設定 (PORTAL_CONFIG)</h4>
-              <p class="text-xs text-slate-400">
-                若您偏好直接以程式碼設定，您也可以隨時在下載的 <code class="text-slate-300">index.html</code> 檔案的最底下找到名為 <code class="text-slate-300">PORTAL_CONFIG</code> 的全域 JavaScript 變數。在該處直接手動進行修改，結構與我們視覺化管理的資料格式完全相同。
-              </p>
             </div>
           </div>
         </div>
@@ -316,12 +305,21 @@
           <select id="app-sub-cat" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
             </select>
         </div>
+        
         <div class="space-y-1.5 col-span-1 sm:col-span-2">
-          <label class="block text-xs font-semibold text-slate-400">小程式 URL 路徑</label>
-          <input type="text" id="app-url" placeholder="例如: apps/calculator/index.html" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
+          <label class="block text-xs font-semibold text-slate-400">程式網頁類型 (會影響卡片外觀與跳轉方式)</label>
+          <select id="app-type" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
+            <option value="static">📁 GitHub 靜態網頁 (內部目錄路徑跳轉)</option>
+            <option value="external">🌐 AI / 外部傳送門 (新分頁跳轉至外部 React/AI 後端網站)</option>
+          </select>
+        </div>
+
+        <div class="space-y-1.5 col-span-1 sm:col-span-2">
+          <label class="block text-xs font-semibold text-slate-400">小程式 URL 網址路徑</label>
+          <input type="text" id="app-url" placeholder="例如: apps/sudoku/index.html 或 https://my-ai.vercel.app" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
         </div>
         <div class="space-y-1.5">
-          <label class="block text-xs font-semibold text-slate-400">Emoji 圖示 (單個字示)</label>
+          <label class="block text-xs font-semibold text-slate-400">Emoji 圖示</label>
           <input type="text" id="app-icon" placeholder="例如: 🧮" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
         </div>
         <div class="space-y-1.5">
@@ -329,7 +327,7 @@
           <input type="date" id="app-date" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm">
         </div>
         <div class="space-y-1.5 col-span-1 sm:col-span-2">
-          <label class="block text-xs font-semibold text-slate-400">功能描述</label>
+          <label class="block text-xs font-semibold text-slate-400">功能描述（簡單說明小程式用途）</label>
           <textarea id="app-desc" rows="2" placeholder="簡短描述這個小程式的功能..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition text-sm"></textarea>
         </div>
         <div class="space-y-1.5 col-span-1 sm:col-span-2">
@@ -362,14 +360,6 @@
             <span class="text-[10px] bg-slate-800 border border-slate-700 text-slate-400 px-2 py-1 rounded">點擊可全選</span>
           </div>
         </div>
-        <div class="bg-indigo-950/40 border border-indigo-800/30 p-4 rounded-xl text-xs text-indigo-300">
-          <strong>💡 接下來該怎麼做？</strong>
-          <ol class="list-decimal pl-4 mt-1.5 space-y-1">
-            <li>點擊下方的 <strong class="text-white">📋 複製全部程式碼</strong> 按鈕。</li>
-            <li>前往您在 GitHub 倉庫中的 <code class="bg-slate-950 text-indigo-300 px-1 rounded">index.html</code> 編輯頁。</li>
-            <li>直接將原本的內容全部刪除，並貼上您剛剛複製的全新內容並儲存。您的導覽頁面就更新完成了！</li>
-          </ol>
-        </div>
       </div>
       <div class="p-4 bg-slate-900 border-t border-slate-700 flex justify-end gap-2 shrink-0">
         <button onclick="closeExportModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-lg text-xs font-medium transition">關閉</button>
@@ -390,10 +380,9 @@
      * 本網頁的管理模式會自動讀寫此變數，並可一鍵匯出完整的新 HTML。
      */
     let PORTAL_CONFIG = {
-      // 填入您的 GitHub 個人頁面或 Repo 連結，右上角按鈕將自動讀取此網址
       githubUrl: "https://github.com/your-username/your-repo-name",
 
-      // 1. 分類設定結構（大分類 -> 小分類）
+      // 1. 分類設定結構
       categories: [
         {
           id: "productivity",
@@ -413,16 +402,16 @@
           ]
         },
         {
-          id: "learning",
-          name: "📖 學習與測試",
+          id: "ai-portals",
+          name: "🤖 AI 與 React 傳送門",
           subcategories: [
-            { id: "english", name: "🔤 英文檢定" },
-            { id: "developer", name: "💻 開發輔助" }
+            { id: "ai-agent", name: "🧠 智慧 Agent" },
+            { id: "react-fullstack", name: "⚡ 全棧應用" }
           ]
         }
       ],
 
-      // 2. 小程式列表（要新增或移除項目，直接在這裡追加/刪除物件）
+      // 2. 小程式列表（【✨已加入 appType 屬性】，用來切換 static / external）
       apps: [
         {
           id: "markdown-editor",
@@ -430,32 +419,11 @@
           description: "支援雙欄即時預覽、自動保存與 HTML / PDF 導出的前端輕量級編輯器。",
           largeCategory: "productivity",
           subCategory: "text",
+          appType: "static", // 📁 靜態網頁
           url: "apps/markdown-editor/index.html",
           icon: "✍️",
           tags: ["Markdown", "寫作", "生產力"],
           dateAdded: "2026-06-01"
-        },
-        {
-          id: "unit-converter",
-          title: "萬用單位轉換器",
-          description: "支援長度、重量、溫度、面積、儲存容量等最常用數值快速相互轉換。",
-          largeCategory: "productivity",
-          subCategory: "calc",
-          url: "apps/unit-converter/index.html",
-          icon: "📐",
-          tags: ["計算", "工程", "工具"],
-          dateAdded: "2026-06-05"
-        },
-        {
-          id: "image-compressor",
-          title: "線上網頁圖片壓縮",
-          description: "完全在瀏覽器本地處理，不需上傳伺服器。支援自訂品質、即時預覽大小與下載。",
-          largeCategory: "productivity",
-          subCategory: "image",
-          url: "apps/image-compressor/index.html",
-          icon: "🖼️",
-          tags: ["圖片", "效能", "壓縮"],
-          dateAdded: "2026-06-10"
         },
         {
           id: "sudoku",
@@ -463,32 +431,35 @@
           description: "內建 4 種難度、自動檢查機制、計時與草稿備忘功能的經典數獨網頁遊戲。",
           largeCategory: "games",
           subCategory: "puzzle",
+          appType: "static", // 📁 靜態網頁
           url: "apps/sudoku/index.html",
           icon: "🧩",
           tags: ["遊戲", "益智", "離線可用"],
           dateAdded: "2026-05-20"
         },
         {
-          id: "tetris",
-          title: "俄羅斯方塊",
-          description: "經典掌機配樂復刻！支援鍵盤與手機虛擬按鍵的流暢方塊堆疊體驗。",
-          largeCategory: "games",
-          subCategory: "arcade",
-          url: "apps/tetris/index.html",
-          icon: "👾",
-          tags: ["復古", "街機", "動作"],
-          dateAdded: "2026-05-15"
+          id: "ai-chatbot",
+          title: "AI 智慧語音聊天小助手",
+          description: "整合 OpenAI 與 Python 後端，支援即時語音識別、情感分析與自訂記憶庫的智慧分身。",
+          largeCategory: "ai-portals",
+          subCategory: "ai-agent",
+          appType: "external", // 🌐 外部傳送門！
+          url: "https://your-ai-app.vercel.app", // 填寫您在 Vercel 或是外部架設的連結
+          icon: "🧠",
+          tags: ["React", "AI", "Python", "外接"],
+          dateAdded: "2026-06-12"
         },
         {
-          id: "word-quiz",
-          title: "多益必考單字測驗",
-          description: "自動產出隨機單選題，並整合單字解釋與錯誤題目複習本的自學工具。",
-          largeCategory: "learning",
-          subCategory: "english",
-          url: "apps/word-quiz/index.html",
-          icon: "🔤",
-          tags: ["多益", "單字", "測驗"],
-          dateAdded: "2026-06-11"
+          id: "react-dashboard",
+          title: "React 全棧雲端記帳本",
+          description: "採用 Next.js 14 與 Supabase 資料庫開發，支援 Google 登入、多圖表理財追蹤的動態全棧專案。",
+          largeCategory: "ai-portals",
+          subCategory: "react-fullstack",
+          appType: "external", // 🌐 外部傳送門！
+          url: "https://my-react-finance.render.com",
+          icon: "⚡",
+          tags: ["Nextjs", "後端", "資料庫"],
+          dateAdded: "2026-06-12"
         }
       ]
     };
@@ -496,44 +467,36 @@
     // ==================== 頁面狀態與交互邏輯 ====================
 
     // 全域篩選與管理狀態
-    let currentLargeFilter = null; // 大分類 ID
-    let currentSubFilter = null;   // 小分類 ID
-    let searchQuery = "";          // 搜尋字串
-    let isAdminMode = false;       // 是否開啟管理模式
+    let currentLargeFilter = null; 
+    let currentSubFilter = null;   
+    let searchQuery = "";          
+    let currentTypeFilter = "all"; // 'all' | 'static' | 'external'
+    let isAdminMode = false;       
 
-    // 當前編輯臨時資料儲存
-    let editingCategoryType = null; // 'large' or 'sub'
-    let editingCategoryObj = null;  // 儲存正在編輯的分類物件
-    let editingAppId = null;        // 儲存正在編輯的小程式 ID
+    let editingCategoryType = null; 
+    let editingCategoryObj = null;  
+    let editingAppId = null;        
 
     // 初始化載入
     document.addEventListener("DOMContentLoaded", () => {
-      // 設定 GitHub 按鈕連結
       const gitLink = document.getElementById("github-link");
       if (gitLink && PORTAL_CONFIG.githubUrl) {
         gitLink.href = PORTAL_CONFIG.githubUrl;
       }
 
-      // 生成大分類選單
       renderLargeCategories();
-      // 生成卡片列表 (初始顯示全部)
       filterAndRenderApps();
       
-      // 註冊搜尋框事件
       document.getElementById("search-input").addEventListener("input", (e) => {
         searchQuery = e.target.value.trim().toLowerCase();
         filterAndRenderApps();
       });
 
-      // 預設第一次造訪或點選時，開啟指導說明
       setTimeout(() => {
         openGuideModal();
       }, 500);
     });
 
-    /**
-     * 土司通知訊息
-     */
     function showToast(message, icon = "ℹ️") {
       const toast = document.getElementById("toast-notification");
       document.getElementById("toast-icon").innerText = icon;
@@ -549,8 +512,29 @@
     }
 
     /**
-     * 切換後台管理模式
+     * 【✨新優化】設定類型過濾 (全部 / 靜態 / 外部)
      */
+    function setTypeFilter(type) {
+      currentTypeFilter = type;
+      
+      // 切換按鈕的高亮樣式
+      const btns = {
+        all: document.getElementById("type-filter-all"),
+        static: document.getElementById("type-filter-static"),
+        external: document.getElementById("type-filter-external")
+      };
+
+      Object.keys(btns).forEach(key => {
+        if (key === type) {
+          btns[key].className = "px-3 py-1.5 rounded-md font-medium bg-indigo-600 text-white transition";
+        } else {
+          btns[key].className = "px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-slate-200 transition";
+        }
+      });
+
+      filterAndRenderApps();
+    }
+
     function toggleAdminMode() {
       isAdminMode = !isAdminMode;
       const banner = document.getElementById("admin-banner");
@@ -576,19 +560,13 @@
         showToast("已離開編輯模式", "ℹ️");
       }
 
-      // 重新生成分類與小程式，以載入或移除編輯按鈕
       renderLargeCategories();
       renderSubCategories();
       filterAndRenderApps();
     }
 
-    /**
-     * 生成大分類菜單
-     */
     function renderLargeCategories() {
       const menu = document.getElementById("large-category-menu");
-      
-      // 先產生「顯示全部」按鈕
       let html = `
         <div class="flex items-center justify-between group">
           <button 
@@ -604,7 +582,6 @@
         </div>
       `;
 
-      // 產生各個大分類按鈕
       PORTAL_CONFIG.categories.forEach(cat => {
         const count = PORTAL_CONFIG.apps.filter(app => app.largeCategory === cat.id).length;
         const isActive = currentLargeFilter === cat.id;
@@ -621,11 +598,10 @@
                 ${count}
               </span>
             </button>
-            
             ${isAdminMode ? `
               <div class="flex items-center shrink-0 pr-1">
-                <button onclick="openCategoryModal('${cat.id}', false)" title="編輯大分類" class="text-indigo-400 hover:text-white p-1 text-xs">✏️</button>
-                <button onclick="deleteCategory('${cat.id}', false)" title="刪除大分類" class="text-rose-400 hover:text-white p-1 text-xs">🗑️</button>
+                <button onclick="openCategoryModal('${cat.id}', false)" class="text-indigo-400 hover:text-white p-1 text-xs">✏️</button>
+                <button onclick="deleteCategory('${cat.id}', false)" class="text-rose-400 hover:text-white p-1 text-xs">🗑️</button>
               </div>
             ` : ''}
           </div>
@@ -635,9 +611,6 @@
       menu.innerHTML = html;
     }
 
-    /**
-     * 生成小分類菜單 (基於目前選擇的大分類)
-     */
     function renderSubCategories() {
       const subMenuContainer = document.getElementById("sub-category-menu");
       
@@ -652,7 +625,6 @@
         return;
       }
 
-      // 生成小分類按鈕
       let html = `
         <button 
           onclick="selectSubCategory(null)" 
@@ -674,11 +646,10 @@
               <span>${sub.name}</span>
               <span class="text-xs text-slate-500">(${count})</span>
             </button>
-            
             ${isAdminMode ? `
               <div class="flex items-center shrink-0 pr-1">
-                <button onclick="openCategoryModal('${sub.id}', true)" title="編輯子分類" class="text-indigo-400 hover:text-white p-1 text-xs">✏️</button>
-                <button onclick="deleteCategory('${sub.id}', true)" title="刪除子分類" class="text-rose-400 hover:text-white p-1 text-xs">🗑️</button>
+                <button onclick="openCategoryModal('${sub.id}', true)" class="text-indigo-400 hover:text-white p-1 text-xs">✏️</button>
+                <button onclick="deleteCategory('${sub.id}', true)" class="text-rose-400 hover:text-white p-1 text-xs">🗑️</button>
               </div>
             ` : ''}
           </div>
@@ -688,42 +659,34 @@
       subMenuContainer.innerHTML = html;
     }
 
-    /**
-     * 切換大分類篩選
-     */
     function selectLargeCategory(catId) {
       currentLargeFilter = catId;
-      currentSubFilter = null; // 更換大分類時，重設子分類
-      
+      currentSubFilter = null; 
       renderLargeCategories();
       renderSubCategories();
       filterAndRenderApps();
     }
 
-    /**
-     * 切換小分類篩選
-     */
     function selectSubCategory(subId) {
       currentSubFilter = subId;
-      
       renderSubCategories();
       filterAndRenderApps();
     }
 
     /**
-     * 核心過濾邏輯與渲染卡片
+     * 核心過濾與渲染專案列表 【✨已整合傳送門視覺效果】
      */
     function filterAndRenderApps() {
       const grid = document.getElementById("apps-grid");
       const noData = document.getElementById("no-data-alert");
       
-      // 過濾數據
       const filtered = PORTAL_CONFIG.apps.filter(app => {
-        // 大分類篩選
         if (currentLargeFilter && app.largeCategory !== currentLargeFilter) return false;
-        // 小分類篩選
         if (currentSubFilter && app.subCategory !== currentSubFilter) return false;
-        // 搜尋篩選 (包含名稱、描述與標籤)
+        
+        // 【✨新篩選】過濾專案網頁類型
+        if (currentTypeFilter !== "all" && (app.appType || "static") !== currentTypeFilter) return false;
+
         if (searchQuery) {
           const matchTitle = app.title.toLowerCase().includes(searchQuery);
           const matchDesc = app.description.toLowerCase().includes(searchQuery);
@@ -733,14 +696,11 @@
         return true;
       });
 
-      // 更新統計數值
       document.getElementById("filtered-count").innerText = filtered.length;
       document.getElementById("total-count").innerText = PORTAL_CONFIG.apps.length;
 
-      // 更新篩選提示標籤
       updateFilterIndicators();
 
-      // 如果無相符資料，且「不是」編輯模式，則顯示提示
       if (filtered.length === 0 && !isAdminMode) {
         grid.innerHTML = "";
         noData.classList.remove("hidden");
@@ -748,10 +708,8 @@
       }
       noData.classList.add("hidden");
 
-      // 生成卡片 HTML
       let cardsHtml = "";
 
-      // 在管理模式下，先在前頭加一個「➕ 新增小程式」虛擬按鈕卡片
       if (isAdminMode) {
         cardsHtml += `
           <button 
@@ -759,26 +717,34 @@
             class="group bg-slate-800/10 hover:bg-slate-800/30 border-2 border-dashed border-slate-700 hover:border-indigo-500/50 rounded-2xl p-6 transition-all duration-300 flex flex-col items-center justify-center text-center shadow-lg h-full min-h-[300px]"
           >
             <span class="text-4xl mb-3 group-hover:scale-125 transition duration-300">➕</span>
-            <span class="text-sm font-bold text-slate-300 group-hover:text-indigo-400 transition">新增小程式項目</span>
-            <p class="text-xs text-slate-500 mt-2 max-w-[200px]">點擊填寫表單，新增並自動將小程式上架在目前的分類中！</p>
+            <span class="text-sm font-bold text-slate-300 group-hover:text-indigo-400 transition">上架新專案 / 傳送門</span>
+            <p class="text-xs text-slate-500 mt-2 max-w-[200px]">點擊填表，可隨時選擇要上架靜態程式或是外部 AI 後端傳送門。</p>
           </button>
         `;
       }
 
       filtered.forEach(app => {
-        // 找尋對應的大分類與小分類名稱
         const parentCat = PORTAL_CONFIG.categories.find(c => c.id === app.largeCategory);
         const subCat = parentCat?.subcategories.find(s => s.id === app.subCategory);
         
         const catName = parentCat ? parentCat.name.replace(/^[^\w\s\u4e00-\u9fa5]+/, '').trim() : '其他';
         const subName = subCat ? subCat.name.replace(/^[^\w\s\u4e00-\u9fa5]+/, '').trim() : '';
 
-        // 生成標籤群 HTML
         const tagsHtml = app.tags.map(tag => `
           <button onclick="filterByTag('${tag}')" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700/50 hover:border-indigo-500/50 hover:text-white transition">
             #${tag}
           </button>
         `).join("");
+
+        // 【✨優化】依據 appType 決定標籤與按鈕樣式
+        const isExternal = app.appType === "external";
+        const typeBadgeHtml = isExternal 
+          ? `<span class="inline-block text-[9px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-md ml-1">🌐 外部傳送門</span>`
+          : `<span class="inline-block text-[9px] font-bold text-indigo-300 bg-indigo-950/80 border border-indigo-500/40 px-2 py-0.5 rounded-md ml-1">📁 靜態網頁</span>`;
+
+        const actionButtonHtml = isExternal
+          ? `<a href="${app.url}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg transition shadow-md shadow-emerald-900/20">穿越傳送門 🚀</a>`
+          : `<a href="${app.url}" class="inline-flex items-center gap-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg transition">啟動程式 ➔</a>`;
 
         cardsHtml += `
           <div class="group bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between shadow-lg hover:shadow-indigo-500/5 relative overflow-hidden">
@@ -796,10 +762,11 @@
                 <span class="text-4xl shrink-0 p-2 bg-slate-900 rounded-xl border border-slate-700/30 group-hover:scale-110 transition duration-300">
                   ${app.icon || '🛠️'}
                 </span>
-                <div class="text-right shrink-0">
+                <div class="text-right shrink-0 space-y-1">
                   <span class="inline-block text-[10px] uppercase tracking-wider font-semibold text-indigo-400 bg-indigo-950/50 border border-indigo-900/50 px-2.5 py-1 rounded-full">
                     ${catName} ${subName ? `• ${subName}` : ''}
                   </span>
+                  <div>${typeBadgeHtml}</div>
                 </div>
               </div>
 
@@ -818,12 +785,7 @@
 
               <div class="border-t border-slate-800 pt-4 flex items-center justify-between">
                 <span class="text-[10px] text-slate-500">更新: ${app.dateAdded}</span>
-                <a 
-                  href="${app.url}" 
-                  class="inline-flex items-center gap-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg transition"
-                >
-                  啟動程式 <span>➔</span>
-                </a>
+                ${actionButtonHtml}
               </div>
             </div>
           </div>
@@ -833,18 +795,12 @@
       grid.innerHTML = cardsHtml;
     }
 
-    /**
-     * 點擊標籤直接進行搜尋過濾
-     */
     function filterByTag(tagName) {
       searchQuery = tagName.toLowerCase();
       document.getElementById("search-input").value = tagName;
       filterAndRenderApps();
     }
 
-    /**
-     * 更新篩選狀態的標記
-     */
     function updateFilterIndicators() {
       const container = document.getElementById("filter-indicator");
       const tagsBox = document.getElementById("filter-tags-container");
@@ -857,7 +813,6 @@
       container.classList.remove("hidden");
       let html = "";
 
-      // 大分類標籤
       if (currentLargeFilter) {
         const cat = PORTAL_CONFIG.categories.find(c => c.id === currentLargeFilter);
         if (cat) {
@@ -870,7 +825,6 @@
         }
       }
 
-      // 小分類標籤
       if (currentSubFilter && currentLargeFilter) {
         const cat = PORTAL_CONFIG.categories.find(c => c.id === currentLargeFilter);
         const sub = cat?.subcategories.find(s => s.id === currentSubFilter);
@@ -884,7 +838,6 @@
         }
       }
 
-      // 搜尋關鍵字標籤
       if (searchQuery) {
         html += `
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700">
@@ -897,35 +850,25 @@
       tagsBox.innerHTML = html;
     }
 
-    /**
-     * 清除搜尋框
-     */
     function clearSearchInput() {
       searchQuery = "";
       document.getElementById("search-input").value = "";
       filterAndRenderApps();
     }
 
-    /**
-     * 清除所有篩選條件
-     */
     function clearAllFilters() {
       currentLargeFilter = null;
       currentSubFilter = null;
       searchQuery = "";
+      currentTypeFilter = "all";
       document.getElementById("search-input").value = "";
+      setTypeFilter("all");
       
       renderLargeCategories();
       renderSubCategories();
       filterAndRenderApps();
     }
 
-
-    // ==================== 後台管理模組 - 分類與小程式的新增、編輯、刪除邏輯 ====================
-
-    /**
-     * 打開分類編輯/新增彈窗
-     */
     function openCategoryModal(catId = null, isSub = false) {
       editingCategoryType = isSub ? 'sub' : 'large';
       const modal = document.getElementById("category-modal");
@@ -934,27 +877,24 @@
       const idInput = document.getElementById("category-id-input");
       const nameInput = document.getElementById("category-name-input");
       
-      idInput.disabled = false; // 預設可填
+      idInput.disabled = false;
 
       if (isSub) {
         title.innerHTML = catId ? `<span>✏️</span> 編輯子分類` : `<span>➕</span> 新增子分類`;
         parentField.classList.remove("hidden");
         
-        // 載入父類大分類選單
         const select = document.getElementById("category-parent-select");
         select.innerHTML = PORTAL_CONFIG.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
         
         if (catId) {
-          // 編輯狀態
           const parent = PORTAL_CONFIG.categories.find(c => c.subcategories.some(s => s.id === catId));
           const sub = parent?.subcategories.find(s => s.id === catId);
           editingCategoryObj = sub;
           select.value = parent.id;
           idInput.value = sub.id;
-          idInput.disabled = true; // ID 禁止更改，避免造成關聯遺失
+          idInput.disabled = true;
           nameInput.value = sub.name;
         } else {
-          // 新增狀態
           editingCategoryObj = null;
           select.value = currentLargeFilter || PORTAL_CONFIG.categories[0]?.id || "";
           idInput.value = "";
@@ -980,16 +920,10 @@
       modal.classList.remove("hidden");
     }
 
-    /**
-     * 關閉分類彈窗
-     */
     function closeCategoryModal() {
       document.getElementById("category-modal").classList.add("hidden");
     }
 
-    /**
-     * 儲存分類 (新增與編輯)
-     */
     function saveCategory() {
       const idInput = document.getElementById("category-id-input").value.trim();
       const nameInput = document.getElementById("category-name-input").value.trim();
@@ -1002,7 +936,6 @@
 
       if (editingCategoryType === 'large') {
         if (!editingCategoryObj) {
-          // 新增大分類
           const exists = PORTAL_CONFIG.categories.some(c => c.id === idInput);
           if (exists) {
             showToast("此大分類 ID 已存在！", "⚠️");
@@ -1015,18 +948,14 @@
           });
           showToast(`已成功建立大分類「${nameInput}」`, "✅");
         } else {
-          // 編輯大分類
           editingCategoryObj.name = nameInput;
           showToast(`已成功更新大分類名稱為「${nameInput}」`, "✅");
         }
       } else {
-        // 子分類
         if (!editingCategoryObj) {
-          // 新增子分類
           const targetParent = PORTAL_CONFIG.categories.find(c => c.id === selectVal);
           if (!targetParent) return;
           
-          // 檢查 ID
           const exists = PORTAL_CONFIG.categories.some(c => c.subcategories.some(s => s.id === idInput));
           if (exists) {
             showToast("此子分類 ID 已被其他分類佔用！", "⚠️");
@@ -1039,15 +968,10 @@
           });
           showToast(`已於「${targetParent.name}」中新增子分類「${nameInput}」`, "✅");
         } else {
-          // 編輯子分類
           editingCategoryObj.name = nameInput;
-          
-          // 檢查是否有變更父大分類
           const currentParent = PORTAL_CONFIG.categories.find(c => c.subcategories.some(s => s.id === editingCategoryObj.id));
           if (currentParent && currentParent.id !== selectVal) {
-            // 移出原大分類
             currentParent.subcategories = currentParent.subcategories.filter(s => s.id !== editingCategoryObj.id);
-            // 移入新大分類
             const newParent = PORTAL_CONFIG.categories.find(c => c.id === selectVal);
             if (newParent) {
               newParent.subcategories.push(editingCategoryObj);
@@ -1063,11 +987,8 @@
       filterAndRenderApps();
     }
 
-    /**
-     * 刪除分類
-     */
     function deleteCategory(catId, isSub = false) {
-      if (!confirm("⚠️ 警告：確定要刪除此分類嗎？刪除分類將會導致歸屬在該類別的小程式變成『未分類狀態』！")) return;
+      if (!confirm("⚠️ 警告：確定要刪除此分類嗎？")) return;
 
       if (!isSub) {
         PORTAL_CONFIG.categories = PORTAL_CONFIG.categories.filter(c => c.id !== catId);
@@ -1087,7 +1008,7 @@
     }
 
     /**
-     * 打開小程式項目編輯或新增彈窗
+     * 打开小程式項目編輯或新增彈窗 【✨已讀取 appType 狀態】
      */
     function openAppModal(appId = null) {
       editingAppId = appId;
@@ -1095,31 +1016,28 @@
       const title = document.getElementById("app-modal-title");
       const selectLarge = document.getElementById("app-large-cat");
       
-      // 載入大分類選單
       selectLarge.innerHTML = PORTAL_CONFIG.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
 
       if (appId) {
-        // 編輯模式
         title.innerHTML = `<span>✏️</span> 編輯小程式`;
         const app = PORTAL_CONFIG.apps.find(a => a.id === appId);
         if (!app) return;
 
         document.getElementById("app-id").value = app.id;
-        document.getElementById("app-id").disabled = true; // 唯一ID禁用
+        document.getElementById("app-id").disabled = true; 
         document.getElementById("app-title").value = app.title;
         document.getElementById("app-large-cat").value = app.largeCategory;
         
-        // 更新子分類選項並指派值
         updateAppSubCatSelect(app.subCategory);
         
+        document.getElementById("app-type").value = app.appType || "static"; // 填入類型
         document.getElementById("app-url").value = app.url;
         document.getElementById("app-icon").value = app.icon;
         document.getElementById("app-date").value = app.dateAdded;
         document.getElementById("app-desc").value = app.description;
         document.getElementById("app-tags").value = app.tags.join(", ");
       } else {
-        // 新增模式
-        title.innerHTML = `<span>➕</span> 上架新小程式`;
+        title.innerHTML = `<span>➕</span> 上架新專案 / 傳送門`;
         document.getElementById("app-id").value = "";
         document.getElementById("app-id").disabled = false;
         document.getElementById("app-title").value = "";
@@ -1127,6 +1045,7 @@
         
         updateAppSubCatSelect(currentSubFilter || "");
         
+        document.getElementById("app-type").value = "static";
         document.getElementById("app-url").value = "apps/my-app/index.html";
         document.getElementById("app-icon").value = "🧩";
         document.getElementById("app-date").value = new Date().toISOString().split('T')[0];
@@ -1137,9 +1056,6 @@
       modal.classList.remove("hidden");
     }
 
-    /**
-     * 當大分類選單更動，聯動更新子分類選項
-     */
     function updateAppSubCatSelect(selectedSubId = "") {
       const parentId = document.getElementById("app-large-cat").value;
       const selectSub = document.getElementById("app-sub-cat");
@@ -1153,21 +1069,17 @@
       }
     }
 
-    /**
-     * 關閉小程式彈窗
-     */
-    function closeAppModal() {
-      document.getElementById("app-edit-modal").classList.add("hidden");
-    }
+    closeAppModal = () => document.getElementById("app-edit-modal").classList.add("hidden");
 
     /**
-     * 儲存小程式
+     * 儲存專案與傳送門 【✨已寫入 appType】
      */
     function saveApp() {
       const idVal = document.getElementById("app-id").value.trim();
       const titleVal = document.getElementById("app-title").value.trim();
       const largeCatVal = document.getElementById("app-large-cat").value;
       const subCatVal = document.getElementById("app-sub-cat").value;
+      const typeVal = document.getElementById("app-type").value; // 取得網頁類型
       const urlVal = document.getElementById("app-url").value.trim();
       const iconVal = document.getElementById("app-icon").value.trim();
       const dateVal = document.getElementById("app-date").value;
@@ -1175,18 +1087,16 @@
       const tagsVal = document.getElementById("app-tags").value.trim();
 
       if (!idVal || !titleVal || !urlVal) {
-        showToast("小程式 ID、名稱與路徑為必填欄位！", "⚠️");
+        showToast("專案 ID、名稱與路徑網址為必填欄位！", "⚠️");
         return;
       }
 
-      // 轉換標籤為字串陣列
       const tagsArray = tagsVal ? tagsVal.split(",").map(t => t.trim()).filter(t => t !== "") : [];
 
       if (!editingAppId) {
-        // 檢查 ID 重複
         const exists = PORTAL_CONFIG.apps.some(a => a.id === idVal);
         if (exists) {
-          showToast("此小程式 ID 已存在，請使用其他 ID", "⚠️");
+          showToast("此 ID 已存在，請換一個識別代碼", "⚠️");
           return;
         }
 
@@ -1196,6 +1106,7 @@
           description: descVal,
           largeCategory: largeCatVal,
           subCategory: subCatVal,
+          appType: typeVal, // 寫入資料物件
           url: urlVal,
           icon: iconVal,
           tags: tagsArray,
@@ -1203,15 +1114,15 @@
         };
 
         PORTAL_CONFIG.apps.push(newApp);
-        showToast(`成功新增小程式：${titleVal}`, "✅");
+        showToast(`成功新增專案：${titleVal}`, "✅");
       } else {
-        // 編輯模式
         const app = PORTAL_CONFIG.apps.find(a => a.id === editingAppId);
         if (app) {
           app.title = titleVal;
           app.description = descVal;
           app.largeCategory = largeCatVal;
           app.subCategory = subCatVal;
+          app.appType = typeVal; // 編輯時更新
           app.url = urlVal;
           app.icon = iconVal;
           app.tags = tagsArray;
@@ -1225,31 +1136,21 @@
       renderLargeCategories();
     }
 
-    /**
-     * 刪除小程式
-     */
     function deleteApp(appId) {
-      if (!confirm("⚠️ 確定要下架並刪除此小程式嗎？此動作將從導覽選單中將其永久移出！")) return;
-      
+      if (!confirm("⚠️ 確定要移除此專案/傳送門嗎？")) return;
       PORTAL_CONFIG.apps = PORTAL_CONFIG.apps.filter(a => a.id !== appId);
-      showToast("小程式已下架", "🗑️");
-      
+      showToast("專案已下架移除", "🗑️");
       filterAndRenderApps();
       renderLargeCategories();
     }
 
-
     // ==================== 智能網頁代碼封裝與匯出模組 (HTML Exporter) ====================
 
-    /**
-     * 生成完整的、包含了最新 PORTAL_CONFIG 的網頁 HTML 代碼
-     */
     function generateHtmlSource() {
       const configJson = JSON.stringify(PORTAL_CONFIG, null, 2);
       const currentFullCode = document.documentElement.outerHTML;
       let baseHtml = "<!DOCTYPE html>\n" + currentFullCode;
 
-      // 重置各項暫時性管理狀態 class
       baseHtml = baseHtml.replace(/id="instruction-modal" class="([^"]*)"/g, 'id="instruction-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden"');
       baseHtml = baseHtml.replace(/id="category-modal" class="([^"]*)"/g, 'id="category-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden"');
       baseHtml = baseHtml.replace(/id="app-edit-modal" class="([^"]*)"/g, 'id="app-edit-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden"');
@@ -1272,87 +1173,37 @@
       return baseHtml;
     }
 
-    /**
-     * 開啟匯出彈窗並填入生成的原始碼
-     */
-    function openExportModal() {
-      const modal = document.getElementById("export-modal");
-      const textarea = document.getElementById("exported-code-area");
-      
-      const freshCode = generateHtmlSource();
-      textarea.value = freshCode;
-
-      modal.classList.remove("hidden");
+    openExportModal = () => {
+      document.getElementById("exported-code-area").value = generateHtmlSource();
+      document.getElementById("export-modal").classList.remove("hidden");
     }
+    
+    closeExportModal = () => document.getElementById("export-modal").classList.add("hidden");
 
-    /**
-     * 關閉匯出彈窗
-     */
-    function closeExportModal() {
-      document.getElementById("export-modal").classList.add("hidden");
-    }
-
-    /**
-     * 一鍵複製匯出的程式碼
-     */
     function copyExportedCode() {
       const textarea = document.getElementById("exported-code-area");
       textarea.select();
-      
       try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          showToast("已成功將全新網頁代碼複製至您的剪貼簿！", "📋");
-        } else {
-          showToast("複製失敗，請手動選取並複製。", "❌");
-        }
-      } catch (err) {
-        showToast("不支援自動複製，請手動全選複製。", "❌");
-      }
+        if (document.execCommand('copy')) showToast("已成功將全新網頁代碼複製至您的剪貼簿！", "📋");
+      } catch (err) { showToast("複製失敗", "❌"); }
     }
 
-    /**
-     * 一鍵下載生成的最新 index.html 網頁檔案
-     */
     function downloadHtmlFile() {
-      const code = generateHtmlSource();
-      const blob = new Blob([code], { type: "text/html;charset=utf-8" });
+      const blob = new Blob([generateHtmlSource()], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      
       const link = document.createElement("a");
-      link.href = url;
-      link.download = "index.html";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
+      link.href = url; link.download = "index.html";
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link); URL.revokeObjectURL(url);
       showToast("index.html 下載成功！", "📥");
     }
 
-
-    // ==================== 原有的 UI 引導彈窗與功能 (Tabs 控制) ====================
-
-    /**
-     * 教學彈窗開啟
-     */
-    function openGuideModal() {
-      toggleModal(true);
-      switchTab('beginner'); // 每次打開預設顯示第一頁
+    openGuideModal = () => { toggleModal(true); switchTab('beginner'); }
+    toggleModal = (show) => {
+      const m = document.getElementById("instruction-modal");
+      if (show) m.classList.remove("hidden"); else m.classList.add("hidden");
     }
 
-    function toggleModal(show) {
-      const modal = document.getElementById("instruction-modal");
-      if (show) {
-        modal.classList.remove("hidden");
-      } else {
-        modal.classList.add("hidden");
-      }
-    }
-
-    /**
-     * 教學分頁切換
-     */
     function switchTab(tabName) {
       const btnBeginner = document.getElementById("tab-btn-beginner");
       const btnCode = document.getElementById("tab-btn-code");
@@ -1364,7 +1215,7 @@
         btnCode.className = "flex-1 py-3 text-center text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-200";
         contentBeginner.classList.remove("hidden");
         contentCode.classList.add("hidden");
-      } else if (tabName === 'code') {
+      } else {
         btnBeginner.className = "flex-1 py-3 text-center text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-200";
         btnCode.className = "flex-1 py-3 text-center text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 transition-all duration-200";
         contentBeginner.classList.add("hidden");
