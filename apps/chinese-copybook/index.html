@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 字帖產生機</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            background-image: url('https://www.transparenttextures.com/patterns/dark-wood.png');
+            color: #f0e6d2;
+            font-family: "MingLiU", "細明體", "Noto Serif TC", serif;
+        }
+        .control-panel {
+            background-color: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid #4a3c2a;
+        }
+        .preview-panel {
+            background-color: #f1f1f1;
+            background-image: url('https://www.transparenttextures.com/patterns/rice-paper-3.png');
+        }
+        .btn-primary {
+            background-color: #8c734b;
+            color: #ffffff;
+            font-weight: bold;
+            border: 1px solid #a08a65;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #a08a65;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+        }
+        .section-title {
+            color: #d4af37;
+            border-bottom: 1px solid #4a3c2a;
+        }
+        select, input[type="text"], textarea, input[type="color"], input[type="number"], input[type="file"] {
+            background-color: #2a2a2a;
+            border: 1px solid #4a3c2a;
+            color: #f0e6d2;
+        }
+        input::file-selector-button {
+            background-color: #8c734b;
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+        .option-button {
+            background-color: #333;
+            border: 1px solid #4a3c2a;
+            transition: all 0.2s ease;
+        }
+        .option-button.active {
+            background-color: #8c734b;
+            color: white;
+            border-color: #d4af37;
+        }
+        #page-container {
+            width: 210mm;
+            min-height: 297mm;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            margin: 2rem auto;
+            padding: 15mm;
+            box-sizing: border-box;
+            background-color: white;
+            display: grid;
+            align-content: start;
+        }
+        .char-cell {
+            position: relative;
+            box-sizing: border-box;
+            color: black;
+        }
+        .char-cell svg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        .char-cell span {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+        .hollow-text {
+            -webkit-text-stroke: 1px;
+            -webkit-text-fill-color: transparent;
+        }
+        .loader {
+            border: 5px solid #4a3c2a;
+            border-top: 5px solid #d4af37;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .sub-setting {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-75 z-50 flex-col items-center justify-center hidden">
+        <div class="loader"></div>
+        <p id="loading-text" class="text-xl mt-4 text-d4af37">正在為您產生 PDF，請稍候...</p>
+    </div>
+
+    <div class="container mx-auto p-4">
+        <header class="text-center my-6">
+            <h1 class="text-5xl font-bold text-d4af37" style="text-shadow: 2px 2px 4px #000;">AI 字帖產生機</h1>
+            <p class="text-lg text-gray-400 mt-2">創造專屬於您的書法練習字帖</p>
+            <div class="mt-2 text-sm text-gray-500">
+                <span>製作：AI 練習曲</span> | <span>Updated: Dec.31, 2025</span>
+            </div>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+            <div class="w-full lg:w-1/3 control-panel p-6 rounded-lg shadow-lg">
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">一、選擇字帖類型</h2>
+                    <div class="grid grid-cols-2 gap-2" id="practice-type">
+                        <button data-value="multi-char" class="option-button p-2 rounded active">多字</button>
+                        <button data-value="multi-char-space" class="option-button p-2 rounded">多字+空行</button>
+                        <button data-value="article" class="option-button p-2 rounded">文章</button>
+                        <button data-value="article-space" class="option-button p-2 rounded">文章+空行</button>
+                    </div>
+
+                    <div id="advanced-practice-settings" class="sub-setting mt-4">
+                        <h3 class="text-sm font-bold text-d4af37 mb-2">練習進階設定</h3>
+                        
+                        <div id="multi-char-settings" class="mb-2">
+                            <label class="text-xs block mb-1">描紅字數 (範本字後的數量)：</label>
+                            <input type="number" id="tracing-count" value="3" min="0" max="20" class="w-full p-1 rounded text-sm">
+                        </div>
+
+                        <div id="article-settings" class="hidden mb-2">
+                            <label class="text-xs block mb-1">描紅行數 (每行文章後的描紅次數)：</label>
+                            <input type="number" id="tracing-rows-count" value="1" min="0" max="10" class="w-full p-1 rounded text-sm">
+                        </div>
+
+                        <div id="empty-rows-wrapper" class="hidden">
+                            <label class="text-xs block mb-1">空行行數 (每組練習後的空格行數)：</label>
+                            <input type="number" id="empty-rows-count" value="1" min="1" max="5" class="w-full p-1 rounded text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">二、選擇田格類型</h2>
+                    <div class="grid grid-cols-3 gap-2" id="grid-type">
+                        <button data-value="tianzi" class="option-button p-2 rounded active">田字</button>
+                        <button data-value="mizi" class="option-button p-2 rounded">米字</button>
+                        <button data-value="mizi-huigong" class="option-button p-2 rounded">米字回宮</button>
+                        <button data-value="huigong" class="option-button p-2 rounded">回宮</button>
+                        <button data-value="jiugong" class="option-button p-2 rounded">九宮</button>
+                        <button data-value="blank" class="option-button p-2 rounded">空白</button>
+                        <button data-value="none" class="option-button p-2 rounded">無格</button>
+                    </div>
+                    <div class="mt-3">
+                        <label class="font-bold">田格顏色：</label>
+                        <input type="color" id="grid-color" value="#000000" class="w-full h-8 p-0 rounded">
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">三、選擇文字字體</h2>
+                    <p class="text-sm text-gray-400 mb-2">請上傳 .ttf 或 .otf 字型檔以產生 PDF。</p>
+                    <input type="file" id="font-upload" accept=".ttf,.otf" class="w-full p-2 rounded">
+                </div>
+                
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">四、選擇文字顏色</h2>
+                     <input type="color" id="text-color" value="#000000" class="w-full h-8 p-0 rounded">
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">五、選擇描紅背景</h2>
+                    <select id="tracing-style" class="w-full p-2 rounded">
+                        <option value="0.1">非常深</option>
+                        <option value="0.2">深</option>
+                        <option value="0.3">較深</option>
+                        <option value="0.4">適中</option>
+                        <option value="0.5">略淺</option>
+                        <option value="0.7">非常淺</option>
+                        <option value="1">白色(不可見)</option>
+                        <option value="hollow">空芯</option>
+                    </select>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold mb-3 section-title pb-2">六、選擇或輸入字帖內文</h2>
+                    <select id="content-select" class="w-full p-2 rounded mb-2">
+                         <optgroup label="蒙學經典"><option value="di-zi-gui">《弟子規》節選</option><option value="san-zi-jing">《三字經》節選</option><option value="qian-zi-wen">《千字文》節選</option></optgroup>
+                         <optgroup label="佛學經典"><option value="xin-jing">《心經》</option><option value="jin-gang-jing">《金剛經》節選</option></optgroup>
+                          <optgroup label="散文名篇"><option value="lan-ting-ji-xu">《蘭亭集序》王羲之</option><option value="yue-yang-lou-ji">《岳陽樓記》范仲淹</option><option value="chibi-fu">《赤壁賦》蘇軾</option></optgroup>
+                         <optgroup label="詩詞名篇"><option value="shui-diao-ge-tou">《水調歌頭》蘇軾</option><option value="jing-ye-si">《靜夜思》李白</option><option value="deng-guanque-lou">《登鸛雀樓》王之渙</option></optgroup>
+                         <optgroup label="哲學宗教"><option value="dao-de-jing">《道德經》節選</option><option value="lun-yu">《論語》節選</option></optgroup>
+                        <optgroup label="歷史地理"><option value="shi-ji">《史記》節選</option></optgroup>
+                        <optgroup label="詩詞散文(其他)"><option value="shi-jing">《詩經》節選 - 關雎</option><option value="chu-ci">《楚辭》節選 - 離騷</option></optgroup>
+                        <optgroup label="小說戲劇"><option value="san-guo">《三國演義》開篇</option><option value="hong-lou-meng">《紅樓夢》節選</option></optgroup>
+                        <optgroup label="政治軍事"><option value="sun-zi">《孫子兵法》始計篇</option></optgroup>
+                    </select>
+                    <textarea id="custom-content" class="w-full h-24 p-2 rounded" placeholder="或在此處輸入您自己的文字(請勿包含標點符號)"></textarea>
+                </div>
+
+                 <button id="generate-btn" class="w-full p-3 rounded-lg text-lg btn-primary">預覽字帖</button>
+            </div>
+
+            <div class="w-full lg:w-2/3 preview-panel p-6 rounded-lg shadow-lg">
+                <div id="preview-controls" class="bg-gray-200 p-4 rounded-lg mb-4 flex items-center justify-center gap-4 text-gray-800 hidden">
+                    <div>
+                        <label for="chars-per-row" class="font-bold">每行字數：</label>
+                        <input type="number" id="chars-per-row" value="10" min="4" max="20" class="w-20 p-1 text-center rounded">
+                    </div>
+                    <div>
+                        <label for="rows-per-page" class="font-bold">每頁行數：</label>
+                        <input type="number" id="rows-per-page" value="12" min="4" max="25" class="w-20 p-1 text-center rounded">
+                    </div>
+                     <button id="download-pdf-btn" class="p-2 px-4 rounded-lg text-base btn-primary">下載 PDF</button>
+                     <p id="font-upload-reminder" class="text-xs text-red-600 font-bold ml-2">請先上傳字體才能下載 PDF</p>
+                </div>
+
+                <div id="preview-area" class="overflow-auto" style="height: calc(100vh - 150px);">
+                    <div id="page-container">
+                        <div class="m-auto text-center text-gray-500">
+                             <h3 class="text-2xl">預覽區域</h3>
+                             <p>請點擊「預覽字帖」。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const classicTexts = {
+            'di-zi-gui': '弟子規聖人訓首孝弟次謹信汎愛眾而親仁有餘力則學文父母呼應勿緩父母命行勿懶父母教須敬聽父母責須順承冬則溫夏則凊晨則省昏則定出必告反必面居有常業無變事雖小勿擅為苟擅為子道虧物雖小勿私藏苟私藏親心傷親所好力為具親所惡謹為去身有傷貽親憂德有傷貽親羞親愛我孝何難親憎我孝方賢',
+            'san-zi-jing': '人之初性本善性相近習相遠苟不教性乃遷教之道貴以專昔孟母擇鄰處子不學斷機杼竇燕山有義方教五子名俱揚養不教父之過教不嚴師之惰子不學非所宜幼不學老何為玉不琢不成器人不學不知義為人子方少時親師友習禮儀香九齡能溫席孝於親所當執融四歲能讓梨弟於長宜先知首孝弟次見聞知某數識某文',
+            'qian-zi-wen': '天地玄黃宇宙洪荒日月盈昃辰宿列張寒來暑往秋收冬藏閏餘成歲律呂調陽雲騰致雨露結為霜金生麗水玉出崑岡劍號巨闕珠稱夜光果珍李柰菜重芥薑海鹹河淡鱗潛羽翔龍師火帝鳥官人皇始制文字乃服衣裳推位讓國有虞陶唐吊民伐罪周發殷湯坐朝問道垂拱平章愛育黎首臣伏戎羌遐邇一體率賓歸王鳴鳳在竹白駒食場化被草木賴及萬方',
+            'xin-jing': '觀自在菩薩行深般若波羅蜜多時照見五蘊皆空度一切苦厄舍利子色不異空空不異色色即是空空即是色受想行識亦復如是舍利子是諸法空相不生不滅不垢不淨不增不減是故空中無色無受想行識無眼耳鼻舌身意無色聲香味觸法無眼界乃至無意識界無無明亦無無明盡乃至無老死亦無老死盡無苦集滅道無智亦無得以無所得故菩提薩埵依般若波羅蜜多故心無罣礙無罣礙故無有恐怖遠離顛倒夢想究竟涅槃三世諸佛依般若波羅蜜多故得阿耨多羅三藐三菩提故知般若波羅蜜多是大神咒是大明咒是無上咒是無等等咒能除一切苦真實不虛故說般若波羅蜜多咒即說咒曰揭諦揭諦波羅揭諦波羅僧揭諦菩提薩婆訶',
+            'jin-gang-jing':'如是我聞一時佛在舍衛國祇樹給孤獨園與大比丘眾千二百五十人俱爾時世尊食時著衣持缽入舍衛大城乞食於其城中次第乞已還至本處飯食訖收衣缽洗足已敷座而坐時長老須菩提在大眾中即從座起偏袒右肩右膝著地合掌恭敬而白佛言希有世尊如來善護念諸菩薩善付囑諸菩薩世尊善男子善女人發阿耨多羅三藐三菩提心應云何住云何降伏其心佛言善哉善哉須菩提如汝所說如來善護念諸菩薩善付囑諸菩薩汝今諦聽當為汝說善男子善女人發阿耨多羅三藐三菩提心應如是住如是降伏其心唯然世尊願樂欲聞',
+            'lan-ting-ji-xu': '永和九年歲在癸丑暮春之初會于會稽山陰之蘭亭脩禊事也群賢畢至少長咸集此地有崇山峻嶺茂林脩竹又有清流激湍映帶左右引以為流觴曲水列坐其次雖無絲竹管弦之盛一觴一詠亦足以暢敘幽情是日也天朗氣清惠風和暢仰觀宇宙之大俯察品類之盛所以遊目騁懷足以極視聽之娛信可樂也',
+            'yue-yang-lou-ji': '慶曆四年春滕子京謫守巴陵郡越明年政通人和百廢具興乃重修岳陽樓增其舊制刻唐賢今人詩賦于其上屬予作文以記之予觀夫巴陵勝狀在洞庭一湖銜遠山吞長江浩浩湯湯橫無際涯朝暉夕陰氣象萬千此則岳陽樓之大觀也前人之述備矣然則北通巫峽南極瀟湘遷客騷人多會於此覽物之情得無異乎',
+            'chibi-fu': '壬戌之秋七月既望蘇子與客泛舟遊於赤壁之下清風徐來水波不興舉酒屬客誦明月之詩歌窈窕之章少焉月出於東山之上徘徊於斗牛之間白露橫江水光接天縱一葦之所如凌萬頃之茫然浩浩乎如馮虛御風學而不知其所止飄飄乎如遺世獨立羽化而登仙',
+            'shui-diao-ge-tou': '明月幾時有把酒問青天不知天上宮閱今夕是何年我欲乘風歸去又恐瓊樓玉宇高處不勝寒起舞弄清影何似在人間轉朱閣低綺戶照無眠不應有恨何事長向別時圓人有悲歡離合月有陰晴圓缺此事古難全但願人長久千里共嬋娟',
+            'jing-ye-si': '床前明月光疑是地上霜舉頭望明月低頭思故鄉',
+            'deng-guanque-lou': '白日依山盡黃河入海流欲窮千里目更上一層樓',
+            'dao-de-jing': '道可道非常道名可名非常名無名天地之始有名萬物之母故常無欲以觀其妙常有欲以觀其此兩者同出而異名同謂之玄玄之又玄眾妙之門天下皆知美之為美斯惡已皆知善之為善斯不善已故有無相生難易相成長短相形高下相傾音聲相和前後相隨是以聖人處無為之事行不言之教萬物作焉而不辭生而不有為而不恃功成而弗居夫唯弗居是以不去',
+        };
+
+        const generateBtn = document.getElementById('generate-btn');
+        const pageContainer = document.getElementById('page-container');
+        const previewControls = document.getElementById('preview-controls');
+        const fontUpload = document.getElementById('font-upload');
+        const downloadPdfBtn = document.getElementById('download-pdf-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+        const fontUploadReminder = document.getElementById('font-upload-reminder');
+        
+        const advancedSettings = document.getElementById('advanced-practice-settings');
+        const multiCharSettings = document.getElementById('multi-char-settings');
+        const articleSettings = document.getElementById('article-settings');
+        const emptyRowsWrapper = document.getElementById('empty-rows-wrapper');
+
+        let currentFontFamily = '"MingLiU", "細明體", "Noto Serif TC", serif';
+        let customFontName = null;
+        let customFontData = null;
+
+        document.querySelectorAll('#practice-type .option-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const group = button.parentElement;
+                group.querySelectorAll('.option-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                
+                const type = button.dataset.value;
+                if (type.startsWith('multi-char')) {
+                    advancedSettings.classList.remove('hidden');
+                    multiCharSettings.classList.remove('hidden');
+                    articleSettings.classList.add('hidden');
+                    if (type === 'multi-char-space') emptyRowsWrapper.classList.remove('hidden');
+                    else emptyRowsWrapper.classList.add('hidden');
+                } else if (type.startsWith('article')) {
+                    advancedSettings.classList.remove('hidden');
+                    multiCharSettings.classList.add('hidden');
+                    articleSettings.classList.remove('hidden');
+                    if (type === 'article-space') emptyRowsWrapper.classList.remove('hidden');
+                    else emptyRowsWrapper.classList.add('hidden');
+                } else {
+                    advancedSettings.classList.add('hidden');
+                }
+                
+                if (!previewControls.classList.contains('hidden')) generatePreview();
+            });
+        });
+
+        document.querySelectorAll('.control-panel .option-button:not(#practice-type .option-button)').forEach(button => {
+            button.addEventListener('click', () => {
+                const group = button.parentElement;
+                group.querySelectorAll('.option-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                if (!previewControls.classList.contains('hidden')) generatePreview();
+            });
+        });
+
+        generateBtn.addEventListener('click', generatePreview);
+
+        fontUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const fontDataUrl = e.target.result;
+                customFontData = fontDataUrl.split(',')[1];
+                customFontName = 'UserUploadedFont';
+                fontUploadReminder.style.display = 'none';
+                const newStyle = document.createElement('style');
+                const oldStyle = document.getElementById('user-font-style');
+                if (oldStyle) oldStyle.remove();
+                newStyle.id = 'user-font-style';
+                newStyle.textContent = `@font-face { font-family: '${customFontName}'; src: url('${fontDataUrl}'); }`;
+                document.head.appendChild(newStyle);
+                currentFontFamily = `'${customFontName}', "MingLiU", "細明體", "Noto Serif TC", serif`;
+                if (!previewControls.classList.contains('hidden')) generatePreview();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function getSelectedValue(groupId) {
+            const el = document.querySelector(`#${groupId} .option-button.active`);
+            return el ? el.dataset.value : null;
+        }
+        
+        function generatePageContent(content) {
+            const gridType = getSelectedValue('grid-type');
+            const gridColor = document.getElementById('grid-color').value;
+            const textColor = document.getElementById('text-color').value;
+            const tracingStyle = document.getElementById('tracing-style').value;
+            const practiceType = getSelectedValue('practice-type');
+            const charsPerRow = parseInt(document.getElementById('chars-per-row').value);
+            const rowsPerPage = parseInt(document.getElementById('rows-per-page').value);
+            
+            const tracingCount = parseInt(document.getElementById('tracing-count').value);
+            const tracingRowsCount = parseInt(document.getElementById('tracing-rows-count').value);
+            const emptyRowsCount = parseInt(document.getElementById('empty-rows-count').value);
+
+            const gapMM = 1;
+            const cellSize = Math.min((210 - 30 - (charsPerRow - 1) * gapMM) / charsPerRow, (297 - 30 - (rowsPerPage - 1) * gapMM) / rowsPerPage);
+
+            pageContainer.innerHTML = '';
+            pageContainer.style.gridTemplateColumns = `repeat(${charsPerRow}, 1fr)`;
+            pageContainer.style.gridTemplateRows = `repeat(${rowsPerPage}, 1fr)`;
+            pageContainer.style.gap = `${gapMM}mm`;
+            
+            for (let r = 0; r < rowsPerPage; r++) {
+                for (let c = 0; c < charsPerRow; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'char-cell';
+                    cell.innerHTML = getGridSVG(gridType, gridColor);
+                    
+                    const charSpan = document.createElement('span');
+                    charSpan.style.fontFamily = currentFontFamily;
+                    charSpan.style.fontSize = `${cellSize * 0.85}mm`;
+                    charSpan.style.color = textColor;
+
+                    let textChar = '';
+                    let isTracing = false;
+
+                    if (practiceType === 'multi-char' || practiceType === 'multi-char-space') {
+                        const cycle = practiceType === 'multi-char' ? 1 : (1 + emptyRowsCount);
+                        if (r % cycle === 0) {
+                            textChar = content[Math.floor(r / cycle)] || '';
+                            if (c > 0) {
+                                if (c <= tracingCount) isTracing = true;
+                                else textChar = '';
+                            }
+                        }
+                    } else if (practiceType === 'article' || practiceType === 'article-space') {
+                        const cycle = 1 + tracingRowsCount + (practiceType === 'article-space' ? emptyRowsCount : 0);
+                        const pos = r % cycle;
+                        const articleLineIdx = Math.floor(r / cycle);
+                        
+                        if (pos === 0) {
+                            textChar = content.substring(articleLineIdx * charsPerRow + c, articleLineIdx * charsPerRow + c + 1);
+                        } else if (pos <= tracingRowsCount) {
+                            textChar = content.substring(articleLineIdx * charsPerRow + c, articleLineIdx * charsPerRow + c + 1);
+                            isTracing = true;
+                        }
+                    }
+
+                    charSpan.textContent = textChar;
+                    if (isTracing) {
+                        if (tracingStyle === 'hollow') {
+                            charSpan.classList.add('hollow-text');
+                            charSpan.style.webkitTextStrokeColor = textColor;
+                        } else {
+                            charSpan.style.opacity = 1 - parseFloat(tracingStyle);
+                        }
+                    }
+                    
+                    cell.appendChild(charSpan);
+                    pageContainer.appendChild(cell);
+                }
+            }
+        }
+        
+        function generatePreview() {
+            previewControls.classList.remove('hidden');
+            const fullContent = (document.getElementById('custom-content').value.replace(/[^\u4e00-\u9fa5]/g, '') || classicTexts[document.getElementById('content-select').value]);
+            const practiceType = getSelectedValue('practice-type');
+            if (!practiceType) return;
+            
+            const charsPerRow = parseInt(document.getElementById('chars-per-row').value);
+            const rowsPerPage = parseInt(document.getElementById('rows-per-page').value);
+            const tracingRowsCount = parseInt(document.getElementById('tracing-rows-count').value);
+            const emptyRowsCount = parseInt(document.getElementById('empty-rows-count').value);
+
+            let pageContentLen;
+            if (practiceType === 'multi-char') pageContentLen = rowsPerPage;
+            else if (practiceType === 'multi-char-space') pageContentLen = Math.floor(rowsPerPage / (1 + emptyRowsCount));
+            else {
+                const cycle = 1 + tracingRowsCount + (practiceType === 'article-space' ? emptyRowsCount : 0);
+                pageContentLen = Math.floor(rowsPerPage / cycle) * charsPerRow;
+            }
+            generatePageContent(fullContent.substring(0, pageContentLen));
+        }
+
+        function getGridSVG(type, color) {
+            const s = 100;
+            const strokeStyle = `stroke="${color}" stroke-width="1" stroke-dasharray="2 2"`;
+            const solidStyle = `stroke="${color}" stroke-width="1.5"`;
+            let inner = '';
+            switch(type) {
+                case 'tianzi': inner = `<path d="M ${s/2} 0 V ${s}" ${strokeStyle}/> <path d="M 0 ${s/2} H ${s}" ${strokeStyle}/>`; break;
+                case 'mizi': inner = `<path d="M ${s/2} 0 V ${s}" ${strokeStyle}/> <path d="M 0 ${s/2} H ${s}" ${strokeStyle}/> <path d="M 0 0 L ${s} ${s}" ${strokeStyle}/> <path d="M ${s} 0 L 0 ${s}" ${strokeStyle}/>`; break;
+                case 'mizi-huigong': inner = `<path d="M ${s/2} 0 V ${s}" ${strokeStyle}/> <path d="M 0 ${s/2} H ${s}" ${strokeStyle}/> <path d="M 0 0 L ${s} ${s}" ${strokeStyle}/> <path d="M ${s} 0 L 0 ${s}" ${strokeStyle}/> <rect x="10" y="10" width="80" height="80" fill="none" ${strokeStyle}/>`; break;
+                case 'huigong': inner = `<rect x="15" y="15" width="70" height="70" fill="none" ${strokeStyle}/>`; break;
+                case 'jiugong': inner = `<path d="M 33 0 V 100" ${strokeStyle}/><path d="M 66 0 V 100" ${strokeStyle}/><path d="M 0 33 H 100" ${strokeStyle}/><path d="M 0 66 H 100" ${strokeStyle}/>`; break;
+            }
+            return type !== 'none' ? `<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="none" ${solidStyle}/>${inner}</svg>` : '';
+        }
+
+        const { jsPDF } = window.jspdf;
+        function hexToRgb(hex) {
+            const res = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return res ? [parseInt(res[1], 16), parseInt(res[2], 16), parseInt(res[3], 16)] : [0,0,0];
+        }
+
+        function drawGridPdf(doc, type, x, y, size, color) {
+            const rgb = hexToRgb(color);
+            doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
+            doc.setLineDashPattern([], 0);
+            doc.setLineWidth(0.2); doc.rect(x, y, size, size);
+            doc.setLineDashPattern([1, 1], 0); doc.setLineWidth(0.1);
+            const s = size;
+            if (type === 'tianzi') doc.line(x+s/2, y, x+s/2, y+s).line(x, y+s/2, x+s, y+s/2);
+            else if (type === 'mizi') doc.line(x+s/2, y, x+s/2, y+s).line(x, y+s/2, x+s, y+s/2).line(x, y, x+s, y+s).line(x+s, y, x, y+s);
+            else if (type === 'mizi-huigong') doc.line(x+s/2, y, x+s/2, y+s).line(x, y+s/2, x+s, y+s/2).line(x, y, x+s, y+s).line(x+s, y, x, y+s).rect(x+s*0.1, y+s*0.1, s*0.8, s*0.8);
+            else if (type === 'huigong') doc.rect(x+s*0.15, y+s*0.15, s*0.7, s*0.7);
+            else if (type === 'jiugong') doc.line(x+s/3, y, x+s/3, y+s).line(x+s*2/3, y, x+s*2/3, y+s).line(x, y+s/3, x+s, y+s/3).line(x, y+s*2/3, x+s, y+s*2/3);
+        }
+
+        [...document.querySelectorAll('.control-panel select, .control-panel input, .control-panel textarea, #chars-per-row, #rows-per-page')].forEach(control => {
+            const eventType = (['TEXTAREA', 'NUMBER', 'COLOR'].includes(control.type?.toUpperCase() || control.tagName)) ? 'input' : 'change';
+            control.addEventListener(eventType, () => {
+                if (!previewControls.classList.contains('hidden')) generatePreview();
+            });
+        });
+
+        downloadPdfBtn.addEventListener('click', async () => {
+            if (!customFontData) { alert('請先上傳字型檔。'); return; }
+            loadingOverlay.style.display = 'flex';
+            try {
+                const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+                doc.addFileToVFS('user.ttf', customFontData);
+                doc.addFont('user.ttf', 'UserFont', 'normal');
+                
+                const fullText = (document.getElementById('custom-content').value.replace(/[^\u4e00-\u9fa5]/g, '') || classicTexts[document.getElementById('content-select').value]);
+                const practiceType = getSelectedValue('practice-type');
+                const gridType = getSelectedValue('grid-type');
+                const gridColor = document.getElementById('grid-color').value;
+                const textColor = document.getElementById('text-color').value;
+                const tracingStyle = document.getElementById('tracing-style').value;
+                const cpr = parseInt(document.getElementById('chars-per-row').value);
+                const rpp = parseInt(document.getElementById('rows-per-page').value);
+                const tc = parseInt(document.getElementById('tracing-count').value);
+                const trc = parseInt(document.getElementById('tracing-rows-count').value);
+                const erc = parseInt(document.getElementById('empty-rows-count').value);
+
+                const margin = 15, gap = 1;
+                const cellSize = Math.min((210 - margin*2 - (cpr-1)*gap)/cpr, (297 - margin*2 - (rpp-1)*gap)/rpp);
+                const fontSize = (cellSize * 0.85) * (72/25.4);
+
+                let charsPerPage;
+                if (practiceType.startsWith('multi-char')) charsPerPage = Math.floor(rpp / (practiceType.endsWith('space') ? 1+erc : 1));
+                else {
+                    const cycle = 1 + trc + (practiceType.endsWith('space') ? erc : 0);
+                    charsPerPage = Math.floor(rpp / cycle) * cpr;
+                }
+                
+                const totalPages = Math.ceil(fullText.length / charsPerPage);
+
+                for (let p = 0; p < totalPages; p++) {
+                    if (p > 0) doc.addPage();
+                    const pageText = fullText.substring(p * charsPerPage, (p+1) * charsPerPage);
+                    for (let r = 0; r < rpp; r++) {
+                        for (let c = 0; c < cpr; c++) {
+                            const x = margin + c * (cellSize + gap), y = margin + r * (cellSize + gap);
+                            if (gridType !== 'none') drawGridPdf(doc, gridType, x, y, cellSize, gridColor);
+
+                            let char = '', isT = false;
+                            if (practiceType.startsWith('multi-char')) {
+                                const cycle = practiceType.endsWith('space') ? 1+erc : 1;
+                                if (r % cycle === 0) {
+                                    char = pageText[Math.floor(r/cycle)] || '';
+                                    if (c > 0 && c <= tc) isT = true; else if (c > tc) char = '';
+                                }
+                            } else {
+                                const cycle = 1 + trc + (practiceType.endsWith('space') ? erc : 0);
+                                const pos = r % cycle, lineIdx = Math.floor(r / cycle);
+                                if (pos <= trc) {
+                                    char = pageText[lineIdx * cpr + c] || '';
+                                    if (pos > 0) isT = true;
+                                }
+                            }
+
+                            if (char) {
+                                const rgb = hexToRgb(textColor);
+                                doc.setTextColor(rgb[0], rgb[1], rgb[2]);
+                                doc.setFont('UserFont', 'normal'); doc.setFontSize(fontSize);
+                                const alpha = isT && tracingStyle !== 'hollow' ? 1 - parseFloat(tracingStyle) : 1;
+                                doc.setGState(new doc.GState({opacity: alpha}));
+                                if (isT && tracingStyle === 'hollow') doc.text(char, x+cellSize/2, y+cellSize/2, {align:'center', baseline:'middle'}, 0, 'stroke');
+                                else if (!(isT && tracingStyle === '1')) doc.text(char, x+cellSize/2, y+cellSize/2, {align:'center', baseline:'middle'});
+                                doc.setGState(new doc.GState({opacity: 1}));
+                            }
+                        }
+                    }
+                    doc.setFontSize(8); doc.setTextColor(150); doc.text("製作：AI 練習曲，Updated: Dec.31, 2025", 105, 292, {align:'center'});
+                }
+                doc.save('AI-字帖.pdf');
+            } finally { loadingOverlay.style.display = 'none'; }
+        });
+    </script>
+</body>
+</html>
