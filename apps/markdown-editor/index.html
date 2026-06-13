@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown 隨身筆記 - 離線編輯器與使用指南</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome 圖標 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Marked.js (Markdown 解析器) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify (防範 XSS 攻擊，確保渲染安全) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        .code-font {
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+        }
+        /* 自訂 Markdown 預覽樣式 */
+        .markdown-body h1 { @apply text-3xl font-bold mt-6 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100; }
+        .markdown-body h2 { @apply text-2xl font-semibold mt-6 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-200; }
+        .markdown-body h3 { @apply text-xl font-semibold mt-4 mb-2 text-gray-800 dark:text-gray-200; }
+        .markdown-body h4 { @apply text-lg font-semibold mt-3 mb-2 text-gray-700 dark:text-gray-300; }
+        .markdown-body p { @apply my-3 leading-relaxed text-gray-600 dark:text-gray-300; }
+        .markdown-body ul { @apply list-disc pl-6 my-3 text-gray-600 dark:text-gray-300; }
+        .markdown-body ol { @apply list-decimal pl-6 my-3 text-gray-600 dark:text-gray-300; }
+        .markdown-body li { @apply my-1; }
+        .markdown-body code { @apply px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-rose-600 dark:text-rose-400 rounded text-sm code-font; }
+        .markdown-body pre { @apply p-4 my-4 bg-gray-900 text-gray-100 rounded-lg overflow-x-auto code-font text-sm leading-6; }
+        .markdown-body pre code { @apply p-0 bg-transparent text-gray-100 dark:text-gray-100 rounded-none; }
+        .markdown-body blockquote { @apply pl-4 border-l-4 border-brand-500 my-4 italic text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 py-2 pr-2 rounded-r; }
+        .markdown-body table { @apply w-full border-collapse my-4 text-sm text-left text-gray-500 dark:text-gray-400; }
+        .markdown-body table th { @apply px-4 py-3 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold border border-gray-200 dark:border-gray-700; }
+        .markdown-body table td { @apply px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300; }
+        .markdown-body table tr:nth-child(even) { @apply bg-gray-50/50 dark:bg-gray-800/20; }
+        .markdown-body a { @apply text-brand-500 hover:text-brand-600 underline transition-colors; }
+        .markdown-body hr { @apply my-6 border-t border-gray-200 dark:border-gray-700; }
+        .markdown-body img { @apply max-w-full h-auto rounded-lg shadow-sm mx-auto my-4; }
+        .markdown-body input[type="checkbox"] { @apply w-4 h-4 text-brand-500 rounded border-gray-300 focus:ring-brand-500 mr-2 inline-block align-middle; }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-200 flex flex-col overflow-hidden">
+
+    <!-- 隱藏的檔案上傳輸入點，用於讀取 .md 檔案 -->
+    <input type="file" id="fileImporter" accept=".md,.markdown,.txt" class="hidden" onchange="importMarkdownFile(event)">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between z-10 shrink-0 shadow-sm">
+        <div class="flex items-center space-x-3">
+            <div class="bg-gradient-to-tr from-brand-600 to-sky-400 p-2 rounded-lg text-white">
+                <i class="fa-solid fa-file-pen text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-wide">Markdown 隨身筆記</h1>
+                <p class="text-xs text-slate-400 hidden sm:block">離線多功能即時編輯器</p>
+            </div>
+        </div>
+
+        <!-- 頂部操作按鈕 -->
+        <div class="flex items-center space-x-2">
+            <!-- 模式切換 -->
+            <button id="themeToggleBtn" onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400" title="切換深淺色主題">
+                <i id="themeIcon" class="fa-solid fa-moon"></i>
+            </button>
+
+            <!-- 匯入檔案 -->
+            <button onclick="triggerImport()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-brand-900/30 text-slate-700 dark:text-slate-200 hover:text-brand-600 dark:hover:text-brand-400 rounded-lg text-sm font-medium transition-all flex items-center space-x-1" title="載入電腦中的 .md 檔案繼續編輯">
+                <i class="fa-solid fa-file-import text-brand-500"></i>
+                <span class="hidden md:inline">匯入 .md 檔</span>
+                <span class="inline md:hidden">匯入</span>
+            </button>
+
+            <!-- 載入手冊/範例 -->
+            <button onclick="loadTutorial()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-brand-900/30 text-slate-700 dark:text-slate-200 hover:text-brand-600 dark:hover:text-brand-400 rounded-lg text-sm font-medium transition-all flex items-center space-x-1" title="隨時喚出 Markdown 完整語法教學">
+                <i class="fa-solid fa-book-open text-amber-500"></i>
+                <span class="hidden md:inline">載入手冊範例</span>
+                <span class="inline md:hidden">手冊</span>
+            </button>
+
+            <!-- 匯出下拉選單 -->
+            <div class="relative inline-block text-left">
+                <button onclick="toggleDropdown('exportDropdown')" class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-all flex items-center space-x-1.5 shadow-sm">
+                    <i class="fa-solid fa-file-export"></i>
+                    <span>匯出檔案</span>
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 z-20 border border-slate-100 dark:border-slate-700">
+                    <div class="py-1">
+                        <button onclick="exportMarkdown()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-2">
+                            <i class="fa-brands fa-markdown text-brand-500"></i>
+                            <span>匯出為 .md 檔</span>
+                        </button>
+                        <button onclick="exportHTML()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-2">
+                            <i class="fa-solid fa-code text-amber-500"></i>
+                            <span>匯出為 .html 檔</span>
+                        </button>
+                        <button onclick="printPDF()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center space-x-2">
+                            <i class="fa-solid fa-print text-indigo-500"></i>
+                            <span>列印 / 儲存 PDF</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 清空按鈕 -->
+            <button onclick="confirmClear()" class="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors" title="清除所有內容">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- 工具列與主介面容器 -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- 側邊：Markdown 快速語法指南（可展開/收合） -->
+        <aside id="guideSidebar" class="w-full md:w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col shrink-0 transition-all duration-300 overflow-hidden hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                <span class="font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-life-ring text-brand-500 mr-2"></i>語法快速對照表</span>
+                <button onclick="toggleGuide()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+                <!-- 標題 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">標題 H1 ~ H6</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono"># 一級標題<br>## 二級標題<br>### 三級標題</code>
+                    <p class="text-xs text-slate-400">井字號數量代表標題級別，記得與文字間要留一格空格。</p>
+                </div>
+
+                <!-- 粗體與斜體 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">文字強調</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono">**粗體文字**<br>*斜體文字*<br>~~刪除線文字~~</code>
+                    <p class="text-xs text-slate-400">雙星號為粗體，單星號為斜體，雙波浪為刪除線。</p>
+                </div>
+
+                <!-- 清單 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">清單與任務</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono">- 無序清單項目一<br>1. 有序清單項目一<br>- [ ] 尚未完成任務<br>- [x] 已完成任務</code>
+                    <p class="text-xs text-slate-400">有序清單會自動依序排列。任務框中填 x 代表已完成。</p>
+                </div>
+
+                <!-- 連結與圖片 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">超連結與圖片</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono">[連結名稱](https://...)<br>![圖片說明](圖片網址)</code>
+                    <p class="text-xs text-slate-400">圖片只比超連結前方多一個驚嘆號 `!` 喔！</p>
+                </div>
+
+                <!-- 程式碼與區塊 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">程式碼區塊</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono">`單行程式碼`<br><br>```javascript<br>const app = "MD Editor";<br>console.log(app);<br>```</code>
+                    <p class="text-xs text-slate-400">使用三個反引號包覆程式碼，可填入語言名稱進行著色。</p>
+                </div>
+
+                <!-- 引用與表格 -->
+                <div class="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div class="font-bold text-brand-600 dark:text-brand-400 mb-1">區塊引用與表格</div>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-800 p-1.5 rounded text-rose-500 mb-1 font-mono">&gt; 這是一段引用文字<br><br>| 欄位A | 欄位B |<br>| ----- | ----- |<br>| 內容1 | 內容2 |</code>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主編輯工作區 -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <!-- 工具快捷列 -->
+            <div class="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 py-1.5 flex items-center justify-between shrink-0 overflow-x-auto whitespace-nowrap">
+                <div class="flex items-center space-x-1 sm:space-x-1.5">
+                    <!-- 展開語法手冊 -->
+                    <button onclick="toggleGuide()" class="px-2 py-1 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded text-xs font-semibold flex items-center space-x-1 border border-slate-200 dark:border-slate-600 shadow-sm" title="顯示/隱藏語法手冊">
+                        <i class="fa-solid fa-circle-question text-brand-500"></i>
+                        <span>語法對照</span>
+                    </button>
+                    <div class="h-4 w-[1px] bg-slate-300 dark:bg-slate-600 mx-1"></div>
+
+                    <!-- 格式化工具 -->
+                    <button onclick="insertFormat('bold')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="粗體"><i class="fa-solid fa-bold"></i></button>
+                    <button onclick="insertFormat('italic')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="斜體"><i class="fa-solid fa-italic"></i></button>
+                    <button onclick="insertFormat('strike')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="刪除線"><i class="fa-solid fa-strikethrough"></i></button>
+                    
+                    <div class="h-4 w-[1px] bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                    
+                    <button onclick="insertFormat('h1')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm font-bold text-xs" title="大標題 H1">H1</button>
+                    <button onclick="insertFormat('h2')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm font-bold text-xs" title="中標題 H2">H2</button>
+                    <button onclick="insertFormat('h3')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm font-bold text-xs" title="小標題 H3">H3</button>
+                    
+                    <div class="h-4 w-[1px] bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                    
+                    <button onclick="insertFormat('ul')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="無序清單"><i class="fa-solid fa-list"></i></button>
+                    <button onclick="insertFormat('ol')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="有序清單"><i class="fa-solid fa-list-ol"></i></button>
+                    <button onclick="insertFormat('task')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="任務清單"><i class="fa-solid fa-square-check"></i></button>
+                    
+                    <div class="h-4 w-[1px] bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                    
+                    <button onclick="insertFormat('link')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="超連結"><i class="fa-solid fa-link"></i></button>
+                    <button onclick="insertFormat('image')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="插入圖片"><i class="fa-solid fa-image"></i></button>
+                    <button onclick="insertFormat('codeblock')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="程式碼區塊"><i class="fa-solid fa-code"></i></button>
+                    <button onclick="insertFormat('table')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="插入表格"><i class="fa-solid fa-table"></i></button>
+                    <button onclick="insertFormat('quote')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="區塊引用"><i class="fa-solid fa-quote-left"></i></button>
+                    <button onclick="insertFormat('hr')" class="p-1 w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 shadow-sm" title="水平分割線"><i class="fa-solid fa-minus"></i></button>
+                </div>
+
+                <!-- 檢視模式切換（主要針對移動端） -->
+                <div class="flex items-center space-x-1 ml-4 bg-slate-200 dark:bg-slate-900 p-1 rounded-lg">
+                    <button id="viewSplitBtn" onclick="setViewMode('split')" class="px-2 py-1 text-xs font-semibold rounded bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm transition-all" title="雙欄對照">
+                        <i class="fa-solid fa-columns mr-1"></i>雙欄
+                    </button>
+                    <button id="viewEditBtn" onclick="setViewMode('edit')" class="px-2 py-1 text-xs font-semibold rounded text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" title="純編輯器">
+                        <i class="fa-solid fa-pen mr-1"></i>編輯
+                    </button>
+                    <button id="viewPreviewBtn" onclick="setViewMode('preview')" class="px-2 py-1 text-xs font-semibold rounded text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all" title="純預覽畫面">
+                        <i class="fa-solid fa-eye mr-1"></i>預覽
+                    </button>
+                </div>
+            </div>
+
+            <!-- 主雙欄工作區 (編輯器 & 預覽器) -->
+            <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+                <!-- 左欄：輸入編輯區 -->
+                <div id="editorContainer" class="flex-1 h-full flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-700 relative">
+                    <div class="bg-white dark:bg-slate-850 px-3 py-1.5 text-xs text-slate-400 dark:text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                        <span><i class="fa-solid fa-terminal mr-1"></i>MARKDOWN 原始碼</span>
+                        <span id="saveIndicator" class="text-emerald-500 flex items-center space-x-1 transition-opacity duration-300 opacity-0">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>已儲存至瀏覽器</span>
+                        </span>
+                    </div>
+                    <textarea id="markdownInput" class="flex-1 w-full p-4 resize-none outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 code-font text-base leading-relaxed overflow-y-auto" placeholder="在此輸入 Markdown 語法... 或點擊上方「載入手冊範例」學習使用方法！" oninput="handleInput()"></textarea>
+                </div>
+
+                <!-- 右欄：即時預覽區 -->
+                <div id="previewContainer" class="flex-1 h-full flex flex-col min-w-0 bg-white dark:bg-slate-900 overflow-hidden">
+                    <div class="bg-white dark:bg-slate-850 px-3 py-1.5 text-xs text-slate-400 dark:text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                        <span><i class="fa-solid fa-square-poll-vertical mr-1"></i>網頁即時預覽效果</span>
+                        <button onclick="toggleScrollSync()" id="syncScrollBtn" class="text-brand-500 dark:text-brand-400 hover:underline flex items-center space-x-1" title="開啟或關閉同步滾動">
+                            <i class="fa-solid fa-link"></i>
+                            <span id="syncScrollText">同步滾動已啟動</span>
+                        </button>
+                    </div>
+                    <div id="markdownPreview" class="flex-1 p-6 overflow-y-auto markdown-body bg-white dark:bg-slate-900">
+                        <!-- 預覽內容渲染區 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部狀態列 -->
+            <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0 select-none">
+                <!-- 左側：字數統計 -->
+                <div class="flex items-center justify-between md:justify-start space-x-4 w-full md:w-auto">
+                    <span id="wordCount"><i class="fa-solid fa-calculator mr-1"></i>字數：0 字</span>
+                    <span id="charCount"><i class="fa-solid fa-text-width mr-1"></i>字元：0 個</span>
+                </div>
+                
+                <!-- 中間：版本、製作人與智慧財產權聲明 -->
+                <div class="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-slate-400 dark:text-slate-500 text-[11px] md:text-xs">
+                    <span class="font-medium text-slate-600 dark:text-slate-300">製作: AI練習曲</span>
+                    <span class="hidden md:inline text-slate-300 dark:text-slate-700">|</span>
+                    <span class="text-rose-500/90 dark:text-rose-400/90 font-medium">歡迎分享，請勿商用</span>
+                    <span class="hidden md:inline text-slate-300 dark:text-slate-700">|</span>
+                    <span>版本資訊: v1.2.0</span>
+                    <span class="hidden md:inline text-slate-300 dark:text-slate-700">|</span>
+                    <span class="font-mono">Updated: Jun.12, 2026</span>
+                </div>
+                
+                <!-- 右側：離線狀態 -->
+                <div class="flex items-center justify-end w-full md:w-auto text-[11px] md:text-xs">
+                    <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span>離線可用</span></span>
+                </div>
+            </footer>
+        </div>
+    </main>
+
+    <!-- 自訂刪除/提示對話框 (Modal) -->
+    <div id="customModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 transform transition-all scale-95 duration-200">
+            <div class="flex items-center space-x-3 text-rose-500 mb-4">
+                <div class="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800 dark:text-white">確認清空</h3>
+            </div>
+            <p id="modalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                您確定要清空目前編輯器中的所有內容嗎？此操作將無法還原。
+            </p>
+            <div class="flex space-x-3 justify-end">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors">
+                    取消
+                </button>
+                <button id="modalConfirmBtn" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-medium transition-colors shadow-md">
+                    確認清空
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自訂訊息 Toast 通知 -->
+    <div id="toastContainer" class="fixed bottom-10 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- 邏輯腳本 -->
+    <script>
+        const editor = document.getElementById('markdownInput');
+        const preview = document.getElementById('markdownPreview');
+        const wordCountSpan = document.getElementById('wordCount');
+        const charCountSpan = document.getElementById('charCount');
+        const saveIndicator = document.getElementById('saveIndicator');
+
+        // Markdown 預設內建使用指南與互動說明文本
+        const manualMarkdown = `# Markdown 互動式使用手冊 🚀
+
+歡迎使用 **Markdown 隨身筆記**！這是一份互動式的 Markdown 操作說明書，您可以一邊閱讀右側渲染出的美觀畫面，一邊在左側的文字編輯區修改這些程式碼，親自體驗 Markdown 的魅力！
+
+---
+
+## 🎯 什麼是 Markdown？
+Markdown 是一種**輕量級標記語言**。它允許人們使用易讀、易寫的純文字格式編寫文件，然後轉換成結構化、排版美觀的 HTML 網頁。非常適合用來寫筆記、部落格、技術文件，甚至寫書。
+
+---
+
+## 🛠️ Markdown 語法大全
+
+### 1. 標題 (Headers)
+標題的前方加上 \`#\` 字號（1到6個，代表一級到六級標題），注意 \`#\` 字號與標題文字之間必須要有**一個空白鍵**：
+# 一級標題 H1
+## 二級標題 H2
+### 三級標題 H3
+#### 四級標題 H4
+
+---
+
+### 2. 字體強調 (Emphasis)
+為您的文字加上著重格式，讓內容主次分明：
+* 這是 **粗體文字** (使用雙星號 \`**\` 或是 雙底線 \`__\`)
+* 這是 *斜體文字* (使用單星號 \`*\` 或是 單底線 \`_\`)
+* 這是 ***粗體加斜體*** 的文字。
+* 這是 ~~被刪除的文字~~ (使用雙波浪號 \`~~\`)
+
+---
+
+### 3. 清單與項目 (Lists)
+
+#### A. 無序清單 (Unordered List)
+使用星號 \`*\`、加號 \`+\` 或減號 \`-\` 作為前綴：
+- 蘋果 🍎
+- 香蕉 🍌
+- 奇異果 🥝
+
+#### B. 有序清單 (Ordered List)
+使用數字加上英文半形句號 \`.\`：
+1. 第一步驟：先洗手
+2. 第二步驟：準備食材
+3. 第三步驟：開始烹飪
+
+#### C. 任務列表 (Task Lists / Todo)
+在清單前加上 \`[ ]\` 或 \`[x]\` 可以做出漂亮的任務清單：
+- [x] 完成 Markdown 基礎語法學習
+- [ ] 撰寫第一篇 Markdown 讀書筆記
+- [ ] 將筆記匯出成 PDF 分享給朋友
+
+---
+
+### 4. 區塊引用 (Blockquotes)
+適合用於引用他人的話或書籍摘錄，只要在文字最前面加上 \`>\`：
+> 「生命的意義在於追求知識，而不是盲目地生存。」
+> — 某位智者
+
+---
+
+### 5. 程式碼與程式碼區塊 (Code blocks)
+
+#### A. 行內程式碼
+在句子中插入一些指令或代碼時，使用反引號 \` \` 包起來，例如：
+請在終端機輸入 \`npm install\` 指令來安裝套件。
+
+#### B. 程式碼區塊 (支援語法高亮)
+使用三個反引號 \` \`\` \` 包覆整段程式，並在首行反引號後方寫上程式語言名稱（如 javascript, python 等）：
+
+\`\`\`javascript
+// 這是一段 JavaScript 示範程式碼
+function sayHello(name) {
+    const greeting = "哈囉，" + name + "！歡迎來到 Markdown 編輯器。";
+    console.log(greeting);
+}
+
+sayHello("讀者朋友");
+\`\`\`
+
+---
+
+### 6. 超連結與圖片 (Links & Images)
+
+#### A. 超連結
+格式為 \`[連結文字](連結網址)\`。
+您可以到 [Markdown 官方網站](https://daringfireball.net/projects/markdown/) 了解更多詳細背景。
+
+#### B. 插入圖片
+圖片的語法與超連結非常相似，只需在前方多加一個驚嘆號 \`!\`。格式為 \`![替代文字](圖片網址)\`：
+![美麗大自然森林](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80)
+
+---
+
+### 7. 表格 (Tables)
+表格使用垂直線 \`|\` 來分隔欄位，使用減號 \`-\` 來分隔標頭與內容：
+
+| 語言名稱 | 難易度 | 熱門指數 | 適用領域 |
+| :--- | :---: | :---: | :--- |
+| **Markdown** | 🌟 超容易 | 🔥🔥🔥🔥🔥 | 文件撰寫、筆記筆記 |
+| HTML | 🌟🌟 | 🔥🔥🔥 | 網頁結構設計 |
+| JavaScript | 🌟🌟🌟🌟 | 🔥🔥🔥🔥🔥 | 前後端網頁、應用程式開發 |
+
+> 💡 提示：在減號的分隔列，冒號在左 \`:---\` 代表置左對齊；冒號在右 \`---:\` 代表置右對齊；兩側都有冒號 \`:---:\` 則代表置中對齊。
+
+---
+
+### 8. 水平分割線 (Horizontal Rules)
+使用三個以上的星號 \`***\`、減號 \`---\` 或底線 \`___\` 來建立分隔線：
+
+---
+
+感謝您使用本編輯器。您可以立刻刪除 these 文字，開始建立您專屬的 Markdown 筆記了！
+`;
+
+        // 初始化狀態
+        let viewMode = 'split'; // split, edit, preview
+        let isScrollSync = true;
+        let saveTimeout;
+
+        // 載入應用程式時執行
+        window.onload = function() {
+            // 嘗試從本地 LocalStorage 載入先前儲存的內容
+            const savedContent = localStorage.getItem('offline_md_editor_content');
+            if (savedContent !== null) {
+                // 如果本地有儲存，無論是否為空，都載入先前使用者的內容
+                editor.value = savedContent;
+            } else {
+                // 如果是第一次開啟此應用程式，預設載入「空白乾淨」的初始畫面
+                editor.value = "";
+            }
+
+            // 讀取本地主題設定
+            const savedTheme = localStorage.getItem('md_editor_theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                updateThemeButton(true);
+            } else {
+                document.documentElement.classList.remove('dark');
+                updateThemeButton(false);
+            }
+
+            // 初始化渲染
+            updatePreview();
+            updateStatistics();
+
+            // 滾動同步綁定
+            setupScrollSync();
+        };
+
+        // 即時渲染 Markdown 與安全性過濾
+        function updatePreview() {
+            const rawMarkdown = editor.value;
+            // 使用 marked 渲染
+            const rawHTML = marked.parse(rawMarkdown);
+            // 使用 DOMPurify 過濾惡意代碼 (XSS)，確保離線與預覽安全
+            const cleanHTML = DOMPurify.sanitize(rawHTML);
+            preview.innerHTML = cleanHTML;
+        }
+
+        // 字數統計
+        function updateStatistics() {
+            const text = editor.value;
+            // 算中英文字元數（排除空格）
+            const charCount = text.replace(/\s/g, '').length;
+            // 簡單估計字數
+            const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+
+            wordCountSpan.innerHTML = `<i class="fa-solid fa-calculator mr-1"></i>字數：${wordCount} 字`;
+            charCountSpan.innerHTML = `<i class="fa-solid fa-text-width mr-1"></i>字元：${charCount} 個`;
+        }
+
+        // 處理使用者輸入 (包含自動存檔防抖動 debounce)
+        function handleInput() {
+            updatePreview();
+            updateStatistics();
+
+            // 防抖：停止輸入 500 毫秒後才自動儲存到 LocalStorage
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                localStorage.setItem('offline_md_editor_content', editor.value);
+                showSaveSuccess();
+            }, 500);
+        }
+
+        // 顯示自動存檔提示
+        function showSaveSuccess() {
+            saveIndicator.classList.remove('opacity-0');
+            saveIndicator.classList.add('opacity-100');
+            setTimeout(() => {
+                saveIndicator.classList.remove('opacity-100');
+                saveIndicator.classList.add('opacity-0');
+            }, 2000);
+        }
+
+        // 插入 Markdown 格式化字元
+        function insertFormat(type) {
+            const startPos = editor.selectionStart;
+            const endPos = editor.selectionEnd;
+            const text = editor.value;
+            const selectedText = text.substring(startPos, endPos);
+            
+            let replacement = "";
+            let focusOffset = 0;
+
+            switch (type) {
+                case 'bold':
+                    replacement = `**${selectedText || "粗體文字"}**`;
+                    focusOffset = selectedText ? 0 : 2;
+                    break;
+                case 'italic':
+                    replacement = `*${selectedText || "斜體文字"}*`;
+                    focusOffset = selectedText ? 0 : 1;
+                    break;
+                case 'strike':
+                    replacement = `~~${selectedText || "刪除線文字"}~~`;
+                    focusOffset = selectedText ? 0 : 2;
+                    break;
+                case 'h1':
+                    replacement = `\n# ${selectedText || "一級標題"}\n`;
+                    break;
+                case 'h2':
+                    replacement = `\n## ${selectedText || "二級標題"}\n`;
+                    break;
+                case 'h3':
+                    replacement = `\n### ${selectedText || "三級標題"}\n`;
+                    break;
+                case 'ul':
+                    replacement = `\n- ${selectedText || "清單項目"}`;
+                    break;
+                case 'ol':
+                    replacement = `\n1. ${selectedText || "有序項目"}`;
+                    break;
+                case 'task':
+                    replacement = `\n- [ ] ${selectedText || "未完成任務"}`;
+                    break;
+                case 'link':
+                    replacement = `[${selectedText || "連結名稱"}](https://example.com)`;
+                    focusOffset = selectedText ? 0 : 1;
+                    break;
+                case 'image':
+                    replacement = `![${selectedText || "圖片描述"}](https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600)`;
+                    break;
+                case 'codeblock':
+                    replacement = `\n\`\`\`javascript\n${selectedText || "// 在此寫入程式碼"}\n\`\`\`\n`;
+                    break;
+                case 'table':
+                    replacement = `\n| 欄位 1 | 欄位 2 | 欄位 3 |\n| :--- | :---: | ---: |\n| 置左內容 | 置中內容 | 置右內容 |\n`;
+                    break;
+                case 'quote':
+                    replacement = `\n> ${selectedText || "引用文字"}\n`;
+                    break;
+                case 'hr':
+                    replacement = `\n---\n`;
+                    break;
+            }
+
+            editor.value = text.substring(0, startPos) + replacement + text.substring(endPos);
+            
+            // 重新聚焦並選取新插入的文字
+            editor.focus();
+            if (focusOffset > 0 && !selectedText) {
+                editor.setSelectionRange(startPos + focusOffset, startPos + replacement.length - focusOffset);
+            } else {
+                editor.setSelectionRange(startPos, startPos + replacement.length);
+            }
+
+            // 更新預覽與儲存
+            handleInput();
+        }
+
+        // 開關右側快速語法指南
+        function toggleGuide() {
+            const sidebar = document.getElementById('guideSidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        // 觸發隱藏的檔案選擇器
+        function triggerImport() {
+            document.getElementById('fileImporter').click();
+        }
+
+        // 處理外部 Markdown 檔案匯入
+        function importMarkdownFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const importedText = e.target.result;
+
+                // 檢查編輯器中是否已有內容，避免直接覆蓋造成悲劇
+                if (editor.value.trim() !== "") {
+                    showModal("確認載入檔案", `您即將匯入檔案「${file.name}」，這將會取代目前編輯器中的內容，建議先匯出您的檔案。確定要載入嗎？`, () => {
+                        editor.value = importedText;
+                        handleInput();
+                        closeModal();
+                        showToast(`成功匯入檔案：${file.name}`, "success");
+                    });
+                } else {
+                    editor.value = importedText;
+                    handleInput();
+                    showToast(`成功匯入檔案：${file.name}`, "success");
+                }
+                // 清空 input 讓同一個檔案能重複被選取上傳
+                event.target.value = "";
+            };
+            reader.readAsText(file);
+        }
+
+        // 載入完整的教學說明書
+        function loadTutorial() {
+            showModal("載入範例", "載入手冊範例將會覆蓋您目前編輯器中的內容，建議先匯出您現有的筆記。確定要載入嗎？", () => {
+                editor.value = manualMarkdown;
+                handleInput();
+                closeModal();
+                showToast("已成功載入 Markdown 使用手冊！", "success");
+            });
+        }
+
+        // 清空編輯器確認
+        function confirmClear() {
+            showModal("確認清除", "您確定要清空目前編輯器中的所有內容嗎？此操作無法還原。", () => {
+                editor.value = "";
+                handleInput();
+                closeModal();
+                showToast("編輯器已清空", "info");
+            });
+        }
+
+        // 主題切換 (Dark / Light)
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('md_editor_theme', isDark ? 'dark' : 'light');
+            updateThemeButton(isDark);
+            showToast(isDark ? "已切換至深色模式" : "已切換至淺色模式", "info");
+        }
+
+        function updateThemeButton(isDark) {
+            const icon = document.getElementById('themeIcon');
+            if (isDark) {
+                icon.className = 'fa-solid fa-sun text-amber-400';
+            } else {
+                icon.className = 'fa-solid fa-moon text-slate-500';
+            }
+        }
+
+        // 下拉選單開關
+        function toggleDropdown(id) {
+            const dropdown = document.getElementById(id);
+            dropdown.classList.toggle('hidden');
+            
+            // 點擊其他地方時自動關閉
+            const closeHandler = function(e) {
+                if (!e.target.closest('.relative')) {
+                    dropdown.classList.add('hidden');
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+            }, 10);
+        }
+
+        // 匯出 Markdown (.md)
+        function exportMarkdown() {
+            const text = editor.value;
+            const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', 'MyMarkdownNote.md');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("成功匯出為 Markdown 檔案！", "success");
+        }
+
+        // 匯出 HTML (.html)
+        function exportHTML() {
+            const markdownContent = preview.innerHTML;
+            const fullHTML = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>由 Markdown 隨身筆記 匯出的文件</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            line-height: 1.6;
+            color: #334155;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 { font-size: 2.25rem; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px; color: #0f172a; }
+        h2 { font-size: 1.75rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px; color: #1e293b; }
+        h3 { font-size: 1.35rem; font-weight: 600; margin-top: 20px; margin-bottom: 12px; color: #334155; }
+        p { margin-bottom: 16px; }
+        code { background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #e11d48; font-size: 0.9em; font-family: monospace; }
+        pre { background-color: #0f172a; color: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; margin: 16px 0; }
+        pre code { background-color: transparent; padding: 0; color: inherit; }
+        blockquote { border-left: 4px solid #0ea5e9; padding-left: 16px; font-style: italic; color: #64748b; margin: 16px 0; background-color: #f8fafc; padding-top: 8px; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px 14px; text-align: left; }
+        th { background-color: #f1f5f9; }
+        a { color: #0ea5e9; text-decoration: underline; }
+        hr { border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+        img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 20px auto; }
+        input[type="checkbox"] { margin-right: 8px; }
+    </style>
+</head>
+<body>
+    ${markdownContent}
+</body>
+</html>`;
+
+            const blob = new Blob([fullHTML], { type: 'text/html;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', 'MyMarkdownNote.html');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("成功匯出為網頁 HTML 檔案！", "success");
+        }
+
+        // 高效安全的列印與儲存為 PDF (開新頁面，繞過 iframe 安全機制阻擋)
+        function printPDF() {
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showToast("開新視窗失敗！請檢查您的瀏覽器是否阻擋了彈出式視窗。", "error");
+                return;
+            }
+
+            const markdownContent = preview.innerHTML;
+            printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>列印文件 - Markdown 隨身筆記</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #ffffff;
+        }
+        h1 { font-size: 2.25rem; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 30px; margin-bottom: 20px; color: #0f172a; }
+        h2 { font-size: 1.75rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px; color: #1e293b; }
+        h3 { font-size: 1.35rem; font-weight: 600; margin-top: 20px; margin-bottom: 12px; color: #334155; }
+        h4 { font-size: 1.15rem; font-weight: 600; margin-top: 15px; margin-bottom: 10px; color: #475569; }
+        p { margin-bottom: 16px; color: #334155; }
+        code { background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #e11d48; font-size: 0.9em; font-family: monospace; }
+        pre { background-color: #0f172a; color: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; margin: 16px 0; }
+        pre code { background-color: transparent; padding: 0; color: inherit; }
+        blockquote { border-left: 4px solid #0ea5e9; padding-left: 16px; font-style: italic; color: #64748b; margin: 16px 0; background-color: #f8fafc; padding-top: 8px; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px 14px; text-align: left; }
+        th { background-color: #f1f5f9; }
+        a { color: #0ea5e9; text-decoration: underline; }
+        hr { border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+        img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 20px auto; }
+        input[type="checkbox"] { margin-right: 8px; }
+        @media print {
+            body { padding: 0; }
+            @page { margin: 2cm; }
+        }
+    </style>
+</head>
+<body>
+    ${markdownContent}
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+                window.close();
+            }, 300);
+        };
+    <\/script>
+</body>
+</html>`);
+
+            printWindow.document.close();
+            showToast("正在準備 PDF 列印預覽...", "success");
+        }
+
+        // 行動端/桌面端檢視模式切換
+        function setViewMode(mode) {
+            viewMode = mode;
+            const editorCol = document.getElementById('editorContainer');
+            const previewCol = document.getElementById('previewContainer');
+            
+            // 按鈕狀態重設
+            document.getElementById('viewSplitBtn').className = "px-2 py-1 text-xs font-semibold rounded text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all";
+            document.getElementById('viewEditBtn').className = "px-2 py-1 text-xs font-semibold rounded text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all";
+            document.getElementById('viewPreviewBtn').className = "px-2 py-1 text-xs font-semibold rounded text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 transition-all";
+
+            const activeClass = "px-2 py-1 text-xs font-semibold rounded bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm transition-all";
+
+            if (mode === 'split') {
+                document.getElementById('viewSplitBtn').className = activeClass;
+                editorCol.classList.remove('hidden');
+                previewCol.classList.remove('hidden');
+            } else if (mode === 'edit') {
+                document.getElementById('viewEditBtn').className = activeClass;
+                editorCol.classList.remove('hidden');
+                previewCol.classList.add('hidden');
+            } else if (mode === 'preview') {
+                document.getElementById('viewPreviewBtn').className = activeClass;
+                editorCol.classList.add('hidden');
+                previewCol.classList.remove('hidden');
+            }
+        }
+
+        // 開關同步滾動
+        function toggleScrollSync() {
+            isScrollSync = !isScrollSync;
+            const btn = document.getElementById('syncScrollBtn');
+            const text = document.getElementById('syncScrollText');
+            if (isScrollSync) {
+                text.innerText = "同步滾動已啟動";
+                btn.className = "text-brand-500 dark:text-brand-400 hover:underline flex items-center space-x-1";
+            } else {
+                text.innerText = "同步滾動已關閉";
+                btn.className = "text-slate-400 hover:underline flex items-center space-x-1";
+            }
+            showToast(isScrollSync ? "已開啟同步滾動" : "已關閉同步滾動", "info");
+        }
+
+        // 建立雙向滾動同步邏輯
+        function setupScrollSync() {
+            let isEditorScrolling = false;
+            let isPreviewScrolling = false;
+
+            editor.addEventListener('scroll', () => {
+                if (!isScrollSync) return;
+                if (isPreviewScrolling) {
+                    isPreviewScrolling = false;
+                    return;
+                }
+                isEditorScrolling = true;
+                
+                // 計算滾動比例
+                const scrollPct = editor.scrollTop / (editor.scrollHeight - editor.clientHeight);
+                preview.scrollTop = scrollPct * (preview.scrollHeight - preview.clientHeight);
+            });
+
+            preview.addEventListener('scroll', () => {
+                if (!isScrollSync) return;
+                if (isEditorScrolling) {
+                    isEditorScrolling = false;
+                    return;
+                }
+                isPreviewScrolling = true;
+
+                // 計算滾動比例
+                const scrollPct = preview.scrollTop / (preview.scrollHeight - preview.clientHeight);
+                editor.scrollTop = scrollPct * (editor.scrollHeight - editor.clientHeight);
+            });
+        }
+
+        // 自訂對話框系統
+        let modalConfirmCallback = null;
+        function showModal(title, msg, onConfirm) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = msg;
+            modalConfirmCallback = onConfirm;
+
+            const modal = document.getElementById('customModal');
+            modal.classList.remove('hidden');
+            document.getElementById('modalConfirmBtn').onclick = modalConfirmCallback;
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.add('hidden');
+        }
+
+        // 自訂 Toast 通知系統
+        function showToast(message, type = "info") {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            let iconClass = "fa-solid fa-circle-info text-blue-500";
+            let bgClass = "bg-white dark:bg-slate-800 border-blue-100 dark:border-blue-900";
+            
+            if (type === "success") {
+                iconClass = "fa-solid fa-circle-check text-emerald-500";
+                bgClass = "bg-white dark:bg-slate-800 border-emerald-100 dark:border-emerald-900";
+            } else if (type === "error") {
+                iconClass = "fa-solid fa-circle-exclamation text-rose-500";
+                bgClass = "bg-white dark:bg-slate-800 border-rose-100 dark:border-rose-900";
+            }
+
+            toast.className = `flex items-center space-x-3 px-4 py-3 rounded-lg border shadow-lg ${bgClass} transition-all duration-300 transform translate-y-5 opacity-0 text-sm font-medium pointer-events-auto max-w-sm`;
+            toast.innerHTML = `
+                <i class="${iconClass} text-lg"></i>
+                <span class="text-slate-700 dark:text-slate-200">${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            // 淡入動畫
+            setTimeout(() => {
+                toast.classList.remove('translate-y-5', 'opacity-0');
+            }, 10);
+
+            // 3秒後淡出
+            setTimeout(() => {
+                toast.classList.add('translate-y-5', 'opacity-0');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
