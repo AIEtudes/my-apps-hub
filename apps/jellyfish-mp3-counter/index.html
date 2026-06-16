@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深海專注水母 - 沉浸式計時器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;500;700&display=swap');
+        
+        :root {
+            --sea-dark: #0f172a;
+            --sea-glow: #22d3ee;
+            --sea-accent: #818cf8;
+        }
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: var(--sea-dark);
+            background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+            color: #f8fafc;
+            overflow: hidden;
+        }
+
+        .ocean-bg::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes pulse-jelly {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 15px var(--sea-glow)); }
+        }
+
+        .animate-jelly-pulse {
+            animation: pulse-jelly 2s ease-in-out infinite;
+        }
+
+        @keyframes tentacle-wave {
+            0%, 100% { stroke-dashoffset: 0; }
+            50% { stroke-dashoffset: 10; }
+        }
+
+        .tentacle {
+            stroke-dasharray: 20;
+            animation: tentacle-wave 3s linear infinite;
+        }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .timer-glow {
+            text-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
+        }
+
+        .transition-all-3 {
+            transition: all 3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 overflow-hidden ocean-bg">
+
+    <div id="main-container" class="relative w-full max-w-2xl h-[600px] glass-panel rounded-[40px] overflow-hidden p-8 flex flex-col items-center justify-between z-10">
+        
+        <div class="relative z-10 text-center">
+            <h1 class="text-3xl font-bold tracking-widest text-cyan-400 mb-1">DEEP FOCUS</h1>
+            <p class="text-[10px] uppercase tracking-[0.2em] text-slate-400">上傳音樂，隨水母潛入深海</p>
+        </div>
+
+        <div class="relative z-10 flex flex-col items-center">
+            <div id="timer-display" class="text-9xl font-light tracking-tighter tabular-nums timer-glow text-cyan-50">
+                25:00
+            </div>
+            
+            <div id="settings-area" class="mt-4 flex items-center gap-3 transition-opacity duration-500">
+                <span class="text-sm font-medium text-slate-400">設定深度(分):</span>
+                <input 
+                    id="minutes-input"
+                    type="number" 
+                    min="1" 
+                    max="999"
+                    value="25"
+                    class="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-center text-cyan-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+            </div>
+        </div>
+
+        <div class="relative z-10 flex flex-wrap justify-center gap-6 mb-4">
+            <button id="start-pause-btn" class="group flex items-center gap-3 px-10 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 rounded-full font-bold shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
+                <span id="start-pause-icon-container"><i data-lucide="play" class="w-5 h-5 fill-current"></i></span>
+                <span id="btn-text">下潛</span>
+            </button>
+            
+            <button id="reset-btn" class="flex items-center gap-2 px-10 py-4 border border-white/20 hover:bg-white/10 text-white rounded-full font-bold transition-all active:scale-95">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                <span>重置</span>
+            </button>
+        </div>
+
+        <div class="relative z-10 w-full flex justify-between items-center border-t border-white/10 pt-6">
+            <div class="flex items-center gap-6">
+                <label class="cursor-pointer group flex items-center gap-2 text-sm font-medium bg-white/5 px-3 py-2 rounded-xl border border-white/10 hover:border-cyan-500/50 hover:bg-white/10 text-slate-400 hover:text-cyan-400 transition-all">
+                    <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                    <div class="flex flex-col">
+                        <span id="music-status" class="truncate max-w-[120px] text-[11px] leading-tight text-white/80">環境音訊</span>
+                        <span class="text-[9px] opacity-60">支援 MP3, MP4, WAV 等</span>
+                    </div>
+                    <!-- 修正：廣泛支援選取器 -->
+                    <input id="audio-upload" type="file" accept=".mp3,.mp4,.m4a,.wav,audio/*,video/*" class="hidden" />
+                </label>
+                <button id="mute-btn" class="text-slate-400 hover:text-white transition-transform">
+                    <span id="mute-icon-container"><i data-lucide="volume-2" class="w-6 h-6"></i></span>
+                </button>
+            </div>
+            <div class="text-right">
+                <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">水母動態</div>
+                <div id="status-text" class="text-cyan-400 font-bold text-xs uppercase">悠游中</div>
+            </div>
+        </div>
+
+        <div id="jellyfish" class="absolute transition-all-3 pointer-events-none z-0" style="left: 50%; top: 60%; transform: translate(-50%, -50%);">
+            <div id="jellyfish-wrapper" class="relative w-[80px] h-[100px] animate-jelly-pulse">
+                <svg viewBox="0 0 100 120" class="w-full h-full drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                    <path id="jelly-head" d="M20,50 Q20,10 50,10 Q80,10 80,50 Q50,60 20,50" fill="rgba(34, 211, 238, 0.4)" stroke="#22d3ee" stroke-width="2" />
+                    <circle cx="50" cy="35" r="12" fill="rgba(34, 211, 238, 0.2)" />
+                    <path class="tentacle" d="M35,55 L30,90" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" />
+                    <path class="tentacle" d="M50,58 L50,105" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round" />
+                    <path class="tentacle" d="M65,55 L70,90" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" />
+                </svg>
+                <div id="jelly-bubble" class="hidden absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-cyan-300 bg-slate-900/80 border border-cyan-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 text-center text-[10px] text-slate-500/60 leading-relaxed tracking-[0.2em] uppercase">
+        <p class="font-bold text-slate-400 mb-1">Deep Focus Explorer v2.3 | 製作: AI 練習曲</p>
+        <p>歡迎分享, 請勿商用 | Updated: Mar.28, 2026</p>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+        <div class="glass-panel p-10 rounded-[40px] max-w-sm w-full text-center border-cyan-500/30">
+            <div class="mb-6 flex justify-center">
+                <div class="w-20 h-20 bg-cyan-500/20 rounded-full flex items-center justify-center animate-bounce shadow-[0_0_30px_rgba(34,211,238,0.3)]">
+                    <i data-lucide="waves" class="w-10 h-10 text-cyan-400"></i>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold mb-2 text-white">抵達深度</h2>
+            <p class="mb-8 text-slate-400">專注時光結束，回升至海面休息一下吧。</p>
+            <button id="modal-close" class="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 rounded-2xl font-bold transition-colors active:scale-95 shadow-lg shadow-cyan-500/20">
+                結束下潛
+            </button>
+        </div>
+    </div>
+
+    <audio id="bgm-audio" loop preload="auto"></audio>
+    <audio id="alarm-audio" src="https://raw.githubusercontent.com/freeCodeCamp/cdn/master/build/testable-projects-fcc/audio/BeepSound.wav"></audio>
+
+    <script>
+        lucide.createIcons();
+
+        const timerDisplay = document.getElementById('timer-display');
+        const minutesInput = document.getElementById('minutes-input');
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const startPauseIconContainer = document.getElementById('start-pause-icon-container');
+        const btnText = document.getElementById('btn-text');
+        const resetBtn = document.getElementById('reset-btn');
+        const audioUpload = document.getElementById('audio-upload');
+        const bgmAudio = document.getElementById('bgm-audio');
+        const alarmAudio = document.getElementById('alarm-audio');
+        const muteBtn = document.getElementById('mute-btn');
+        const muteIconContainer = document.getElementById('mute-icon-container');
+        const statusText = document.getElementById('status-text');
+        const settingsArea = document.getElementById('settings-area');
+        const modal = document.getElementById('modal');
+        const modalClose = document.getElementById('modal-close');
+        
+        const jelly = document.getElementById('jellyfish');
+        const jellyWrapper = document.getElementById('jellyfish-wrapper');
+        const jellyBubble = document.getElementById('jelly-bubble');
+
+        let totalSeconds = 25 * 60;
+        let isActive = false;
+        let timerId = null;
+        let isMuted = false;
+
+        function updateDisplay() {
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            timerDisplay.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function toggleTimer() {
+            isActive = !isActive;
+            if (isActive) {
+                btnText.textContent = "暫停";
+                startPauseIconContainer.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+                settingsArea.classList.add('opacity-0', 'pointer-events-none');
+                
+                if (!isMuted && bgmAudio.src) {
+                    bgmAudio.play().catch(e => {
+                        console.error("播放失敗:", e);
+                        document.getElementById('music-status').textContent = "不支援此格式";
+                    });
+                }
+
+                timerId = setInterval(() => {
+                    if (totalSeconds > 0) {
+                        totalSeconds--;
+                        updateDisplay();
+                    } else {
+                        completeTimer();
+                    }
+                }, 1000);
+            } else {
+                clearInterval(timerId);
+                btnText.textContent = "繼續下潛";
+                startPauseIconContainer.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+                bgmAudio.pause();
+                settingsArea.classList.remove('opacity-0', 'pointer-events-none');
+            }
+            lucide.createIcons();
+        }
+
+        function resetTimer() {
+            isActive = false;
+            clearInterval(timerId);
+            totalSeconds = parseInt(minutesInput.value) * 60 || 0;
+            updateDisplay();
+            btnText.textContent = "下潛";
+            startPauseIconContainer.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+            settingsArea.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('hidden');
+            
+            bgmAudio.pause();
+            bgmAudio.currentTime = 0;
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+            
+            lucide.createIcons();
+        }
+
+        function completeTimer() {
+            isActive = false;
+            clearInterval(timerId);
+            bgmAudio.pause();
+            if (!isMuted) {
+                alarmAudio.currentTime = 0;
+                alarmAudio.play().catch(e => console.error(e));
+            }
+            modal.classList.remove('hidden');
+            updateJellyAnimation('happy');
+        }
+
+        function updateJellyAnimation(state) {
+            const states = {
+                'active': '深度下潛中',
+                'happy': '抵達目的地',
+                'drifting': '悠游中',
+                'observing': '觀察海流',
+                'idle': '靜止懸浮'
+            };
+            
+            statusText.textContent = states[state] || '探索中';
+            jellyBubble.classList.add('hidden');
+
+            if (state === 'active') {
+                jellyWrapper.style.filter = 'hue-rotate(0deg) brightness(1.2)';
+            } else if (state === 'happy') {
+                jellyWrapper.style.filter = 'hue-rotate(150deg) brightness(1.5)';
+                jellyBubble.classList.remove('hidden');
+                jellyBubble.textContent = "✨ REACHED!";
+            } else if (state === 'observing') {
+                jellyBubble.classList.remove('hidden');
+                jellyBubble.textContent = "???";
+            }
+            
+            if (!bgmAudio.paused && bgmAudio.src) {
+                jellyBubble.classList.remove('hidden');
+                jellyBubble.textContent = "🎵 ♫ ♪";
+            }
+        }
+
+        function moveJellyfish() {
+            const container = document.getElementById('main-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const padding = 100;
+
+            let currentState = isActive ? 'active' : ['drifting', 'observing', 'idle'][Math.floor(Math.random() * 3)];
+            updateJellyAnimation(currentState);
+
+            if (currentState === 'idle') return;
+
+            const targetX = Math.random() * (rect.width - padding * 2) + padding;
+            const targetY = Math.random() * (rect.height - padding * 2) + padding;
+
+            const currentX = parseFloat(jelly.style.left) || 50;
+            const currentXPixel = (currentX / 100) * rect.width;
+            
+            jellyWrapper.style.transform = targetX < currentXPixel ? 'rotate(-10deg)' : 'rotate(10deg)';
+            
+            jelly.style.left = `${(targetX / rect.width) * 100}%`;
+            jelly.style.top = `${(targetY / rect.height) * 100}%`;
+        }
+
+        startPauseBtn.addEventListener('click', toggleTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        modalClose.addEventListener('click', resetTimer);
+
+        minutesInput.addEventListener('change', () => {
+            if (!isActive) {
+                totalSeconds = Math.max(0, parseInt(minutesInput.value) * 60 || 0);
+                updateDisplay();
+            }
+        });
+
+        audioUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                bgmAudio.src = url;
+                bgmAudio.load();
+                document.getElementById('music-status').textContent = file.name;
+                if (isActive && !isMuted) bgmAudio.play().catch(e => console.error(e));
+            }
+        });
+
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteIconContainer.innerHTML = isMuted ? 
+                '<i data-lucide="volume-x" class="w-6 h-6 text-rose-500"></i>' : 
+                '<i data-lucide="volume-2" class="w-6 h-6"></i>';
+            
+            if (isMuted) {
+                bgmAudio.pause();
+                alarmAudio.pause();
+            } else if (isActive && bgmAudio.src) {
+                bgmAudio.play().catch(e => console.error(e));
+            }
+            lucide.createIcons();
+        });
+
+        setInterval(moveJellyfish, 4000);
+        updateDisplay();
+    </script>
+</body>
+</html>
