@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夢幻星空兔 - 專注計時器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;700&display=swap');
+        
+        :root {
+            --dream-pink: #ffdae0;
+            --dream-purple: #e0c3fc;
+            --dream-yellow: #fef9c3;
+            --dream-accent: #ff85a1;
+        }
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+            background-attachment: fixed;
+            color: #5d5d5d;
+            overflow: hidden;
+        }
+
+        .dream-bg {
+            background: linear-gradient(to bottom, #fff5f7, #f3e8ff);
+            position: relative;
+        }
+
+        .dream-bg::before {
+            content: "✨";
+            position: absolute;
+            top: 10%; left: 15%;
+            animation: sparkle 3s infinite;
+            font-size: 20px;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(15px);
+            border: 2px solid #ffffff;
+            box-shadow: 0 20px 50px rgba(255, 182, 193, 0.3);
+        }
+
+        @keyframes bunny-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+        }
+
+        .animate-bunny-float {
+            animation: bunny-float 3s ease-in-out infinite;
+        }
+
+        @keyframes ear-wiggle {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(10deg); }
+        }
+
+        .ear-l { transform-origin: bottom right; animation: ear-wiggle 2s infinite; }
+        .ear-r { transform-origin: bottom left; animation: ear-wiggle 2s infinite reverse; }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .timer-text {
+            background: linear-gradient(45deg, #ff85a1, #c3aed6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.05));
+        }
+
+        .transition-soft {
+            transition: all 4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 overflow-hidden">
+
+    <!-- 主要容器 -->
+    <div id="main-container" class="relative w-full max-w-2xl h-[600px] glass-card rounded-[50px] overflow-hidden p-8 flex flex-col items-center justify-between z-10 dream-bg">
+        
+        <!-- 頂部標題 -->
+        <div class="relative z-10 text-center">
+            <h1 class="text-3xl font-bold tracking-tight text-[#ff85a1] mb-1">DREAMY BUNNY</h1>
+            <p class="text-[10px] uppercase tracking-[0.2em] text-[#b4a0d1] font-bold">與星空小兔一起度過甜美時光</p>
+        </div>
+
+        <!-- 倒數計時顯示 -->
+        <div class="relative z-10 flex flex-col items-center">
+            <div id="timer-display" class="text-8xl font-medium tracking-normal tabular-nums timer-text">
+                25:00
+            </div>
+            
+            <!-- 設定區 -->
+            <div id="settings-area" class="mt-4 flex items-center gap-3 transition-opacity duration-500">
+                <span class="text-sm font-bold text-[#b4a0d1]">設定時間(分):</span>
+                <input 
+                    id="minutes-input"
+                    type="number" 
+                    min="1" 
+                    max="999"
+                    value="25"
+                    class="w-16 bg-white border-2 border-[#ffdae0] rounded-2xl px-2 py-1 text-center text-[#ff85a1] font-bold focus:outline-none focus:border-[#ff85a1]"
+                />
+            </div>
+        </div>
+
+        <!-- 控制按鈕 -->
+        <div class="relative z-10 flex flex-wrap justify-center gap-6 mb-4">
+            <button id="start-pause-btn" class="group flex items-center gap-3 px-12 py-4 bg-[#ff85a1] hover:bg-[#ff7091] text-white rounded-full font-bold shadow-lg shadow-pink-200 transition-all active:scale-95">
+                <span id="start-pause-icon-container"><i data-lucide="sparkles" class="w-5 h-5"></i></span>
+                <span id="btn-text">開始航行</span>
+            </button>
+            
+            <button id="reset-btn" class="flex items-center gap-2 px-10 py-4 bg-white border-2 border-[#ffdae0] hover:bg-[#fff5f7] text-[#ff85a1] rounded-full font-bold transition-all active:scale-95">
+                <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                <span>重設</span>
+            </button>
+        </div>
+
+        <!-- 工具列 -->
+        <div class="relative z-10 w-full flex justify-between items-center border-t-2 border-[#fdf0f2] pt-6">
+            <div class="flex items-center gap-4">
+                <label class="cursor-pointer group flex items-center gap-2 text-xs font-bold bg-white/50 px-4 py-2 rounded-2xl border-2 border-[#ffdae0] hover:border-[#ff85a1] text-[#b4a0d1] hover:text-[#ff85a1] transition-all">
+                    <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                    <div class="flex flex-col">
+                        <span id="music-status" class="truncate max-w-[100px] leading-tight text-[#ff85a1]">環境音樂</span>
+                        <span class="text-[8px] opacity-60">點擊選取 MP3/MP4</span>
+                    </div>
+                    <!-- 修正：擴大 accept 屬性，確保在各裝置都能看到 MP4 和 MP3 -->
+                    <input id="audio-upload" type="file" accept=".mp3,.mp4,.m4a,.wav,audio/*,video/*" class="hidden" />
+                </label>
+                <button id="mute-btn" class="text-[#ffdae0] hover:text-[#ff85a1] transition-transform">
+                    <span id="mute-icon-container"><i data-lucide="volume-2" class="w-6 h-6"></i></span>
+                </button>
+            </div>
+            <div class="text-right">
+                <div class="text-[9px] uppercase tracking-widest text-[#b4a0d1] mb-1">小兔狀態</div>
+                <div id="status-text" class="text-[#ff85a1] font-bold text-xs">睡午覺中</div>
+            </div>
+        </div>
+
+        <!-- 兔子主角 -->
+        <div id="bunny" class="absolute transition-soft pointer-events-none z-0" style="left: 50%; top: 65%; transform: translate(-50%, -50%);">
+            <div id="bunny-wrapper" class="relative w-[100px] h-[100px] animate-bunny-float">
+                <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">
+                    <circle cx="50" cy="70" r="25" fill="#ffffff" />
+                    <ellipse class="ear-l" cx="40" cy="30" rx="8" ry="25" fill="#ffffff" />
+                    <ellipse class="ear-l" cx="40" cy="30" rx="4" ry="18" fill="#ffdae0" />
+                    <ellipse class="ear-r" cx="60" cy="30" rx="8" ry="25" fill="#ffffff" />
+                    <ellipse class="ear-r" cx="60" cy="30" rx="4" ry="18" fill="#ffdae0" />
+                    <circle cx="50" cy="50" r="22" fill="#ffffff" />
+                    <circle cx="42" cy="48" r="2.5" fill="#5d5d5d" />
+                    <circle cx="58" cy="48" r="2.5" fill="#5d5d5d" />
+                    <path d="M48 55 Q50 58 52 55" fill="none" stroke="#ff85a1" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="38" cy="55" r="4" fill="#ffdae0" opacity="0.6" />
+                    <circle cx="62" cy="55" r="4" fill="#ffdae0" opacity="0.6" />
+                </svg>
+                <div id="bunny-bubble" class="hidden absolute -top-4 left-full -translate-x-4 text-[10px] font-bold text-white bg-[#ff85a1] border-2 border-white px-2 py-1 rounded-full shadow-sm whitespace-nowrap">...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部資訊 -->
+    <div class="mt-8 text-center text-[10px] text-[#b4a0d1] leading-relaxed tracking-[0.2em] uppercase">
+        <p class="font-bold mb-1">Dreamy Bunny v1.3 | 製作: AI 練習曲</p>
+        <p>歡迎分享, 請勿商用 | Updated: Mar.28, 2026</p>
+    </div>
+
+    <!-- 完成彈窗 -->
+    <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-[#ffdae0]/60 backdrop-blur-md p-4">
+        <div class="glass-card p-10 rounded-[50px] max-w-sm w-full text-center border-[#ffdae0]">
+            <div class="mb-6 flex justify-center">
+                <div class="w-20 h-20 bg-[#ff85a1] rounded-full flex items-center justify-center animate-bounce shadow-lg shadow-pink-200">
+                    <i data-lucide="party-popper" class="w-10 h-10 text-white"></i>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold mb-2 text-[#ff85a1]">醒醒囉！</h2>
+            <p class="mb-8 text-[#b4a0d1] font-medium">專注的時間結束了，跟小兔一起去摘星星吧！</p>
+            <button id="modal-close" class="w-full py-4 bg-[#ff85a1] hover:bg-[#ff7091] text-white rounded-3xl font-bold transition-all active:scale-95 shadow-lg shadow-pink-200">
+                好喔！
+            </button>
+        </div>
+    </div>
+
+    <!-- 音軌 -->
+    <audio id="bgm-audio" loop preload="auto"></audio>
+    <audio id="alarm-audio" src="https://raw.githubusercontent.com/freeCodeCamp/cdn/master/build/testable-projects-fcc/audio/BeepSound.wav"></audio>
+
+    <script>
+        lucide.createIcons();
+
+        const timerDisplay = document.getElementById('timer-display');
+        const minutesInput = document.getElementById('minutes-input');
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const startPauseIconContainer = document.getElementById('start-pause-icon-container');
+        const btnText = document.getElementById('btn-text');
+        const resetBtn = document.getElementById('reset-btn');
+        const audioUpload = document.getElementById('audio-upload');
+        const bgmAudio = document.getElementById('bgm-audio');
+        const alarmAudio = document.getElementById('alarm-audio');
+        const muteBtn = document.getElementById('mute-btn');
+        const muteIconContainer = document.getElementById('mute-icon-container');
+        const statusText = document.getElementById('status-text');
+        const settingsArea = document.getElementById('settings-area');
+        const modal = document.getElementById('modal');
+        const modalClose = document.getElementById('modal-close');
+        
+        const bunny = document.getElementById('bunny');
+        const bunnyWrapper = document.getElementById('bunny-wrapper');
+        const bunnyBubble = document.getElementById('bunny-bubble');
+
+        let totalSeconds = 25 * 60;
+        let isActive = false;
+        let timerId = null;
+        let isMuted = false;
+
+        function updateDisplay() {
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            timerDisplay.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function toggleTimer() {
+            isActive = !isActive;
+            if (isActive) {
+                btnText.textContent = "休息一下";
+                startPauseIconContainer.innerHTML = '<i data-lucide="pause" class="w-5 h-5"></i>';
+                settingsArea.classList.add('opacity-0', 'pointer-events-none');
+                
+                if (!isMuted && bgmAudio.src) {
+                    bgmAudio.play().catch(e => {
+                        console.error("播放失敗:", e);
+                        // 如果播放失敗（例如格式不支持），顯示提示
+                        document.getElementById('music-status').textContent = "不支援此格式";
+                    });
+                }
+
+                timerId = setInterval(() => {
+                    if (totalSeconds > 0) {
+                        totalSeconds--;
+                        updateDisplay();
+                    } else {
+                        completeTimer();
+                    }
+                }, 1000);
+            } else {
+                clearInterval(timerId);
+                btnText.textContent = "繼續航行";
+                startPauseIconContainer.innerHTML = '<i data-lucide="sparkles" class="w-5 h-5"></i>';
+                bgmAudio.pause();
+                settingsArea.classList.remove('opacity-0', 'pointer-events-none');
+            }
+            lucide.createIcons();
+        }
+
+        function resetTimer() {
+            isActive = false;
+            clearInterval(timerId);
+            totalSeconds = parseInt(minutesInput.value) * 60 || 0;
+            updateDisplay();
+            btnText.textContent = "開始航行";
+            startPauseIconContainer.innerHTML = '<i data-lucide="sparkles" class="w-5 h-5"></i>';
+            settingsArea.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('hidden');
+            
+            bgmAudio.pause();
+            bgmAudio.currentTime = 0;
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+            
+            lucide.createIcons();
+        }
+
+        function completeTimer() {
+            isActive = false;
+            clearInterval(timerId);
+            bgmAudio.pause();
+            if (!isMuted) {
+                alarmAudio.currentTime = 0;
+                alarmAudio.play().catch(e => console.error(e));
+            }
+            modal.classList.remove('hidden');
+            updateBunnyState('party');
+        }
+
+        function updateBunnyState(state) {
+            const states = {
+                'active': '專注航行中',
+                'party': '開心撒花',
+                'drifting': '太空漫步',
+                'wondering': '思考兔生',
+                'idle': '睡午覺中'
+            };
+            
+            statusText.textContent = states[state] || '探索中';
+            bunnyBubble.classList.add('hidden');
+
+            if (state === 'party') {
+                bunnyBubble.classList.remove('hidden');
+                bunnyBubble.textContent = "YAY! ✨";
+            } else if (state === 'wondering') {
+                bunnyBubble.classList.remove('hidden');
+                bunnyBubble.textContent = "Hmm?";
+            }
+            
+            if (!bgmAudio.paused && bgmAudio.src) {
+                bunnyBubble.classList.remove('hidden');
+                bunnyBubble.textContent = "🎵 Love this!";
+            }
+        }
+
+        function moveBunny() {
+            const container = document.getElementById('main-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const padding = 100;
+
+            let currentState = isActive ? 'active' : ['drifting', 'wondering', 'idle'][Math.floor(Math.random() * 3)];
+            updateBunnyState(currentState);
+
+            if (currentState === 'idle') return;
+
+            const targetX = Math.random() * (rect.width - padding * 2) + padding;
+            const targetY = Math.random() * (rect.height - padding * 2) + padding;
+
+            const currentX = parseFloat(bunny.style.left) || 50;
+            const currentXPixel = (currentX / 100) * rect.width;
+            
+            bunnyWrapper.style.transform = targetX < currentXPixel ? 'scaleX(-1)' : 'scaleX(1)';
+            
+            bunny.style.left = `${(targetX / rect.width) * 100}%`;
+            bunny.style.top = `${(targetY / rect.height) * 100}%`;
+        }
+
+        startPauseBtn.addEventListener('click', toggleTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        modalClose.addEventListener('click', resetTimer);
+
+        minutesInput.addEventListener('change', () => {
+            if (!isActive) {
+                totalSeconds = Math.max(0, parseInt(minutesInput.value) * 60 || 0);
+                updateDisplay();
+            }
+        });
+
+        // 修正上傳邏輯
+        audioUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                bgmAudio.src = url;
+                bgmAudio.load(); // 強制重新加載
+                document.getElementById('music-status').textContent = file.name;
+                if (isActive && !isMuted) {
+                    bgmAudio.play().catch(e => console.error("選取後即時播放失敗:", e));
+                }
+            }
+        });
+
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteIconContainer.innerHTML = isMuted ? 
+                '<i data-lucide="volume-x" class="w-6 h-6 text-rose-300"></i>' : 
+                '<i data-lucide="volume-2" class="w-6 h-6"></i>';
+            
+            if (isMuted) {
+                bgmAudio.pause();
+                alarmAudio.pause();
+            } else if (isActive && bgmAudio.src) {
+                bgmAudio.play().catch(e => console.error(e));
+            }
+            lucide.createIcons();
+        });
+
+        setInterval(moveBunny, 5000);
+        updateDisplay();
+    </script>
+</body>
+</html>
