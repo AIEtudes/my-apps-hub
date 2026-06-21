@@ -6,6 +6,8 @@
     <title>在地隨身 & 雲端雙效縮網址工具</title>
     <!-- 引入 Tailwind CSS 進行視覺設計 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入開源完全免費的 QRCode.js 庫 (支援本機繪製與下載) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -18,6 +20,10 @@
         .no-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+        /* 修正 QRCode 庫內建圖片的置中與邊框 */
+        #redirect-qrcode img {
+            display: inline-block !important;
         }
     </style>
 </head>
@@ -42,53 +48,70 @@
         </div>
     </div>
 
-    <!-- 🚀 全新升級：科技感極光傳送門 (Sandbox-Proof Portal Overlay) -->
+    <!-- 🚀 科技感極光傳送門 + QR Code 下載面板 -->
     <div id="redirect-screen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center hidden z-50 p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl relative overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl relative overflow-hidden">
             <!-- 裝飾背景流光與光暈 -->
             <div class="absolute -top-12 -right-12 w-40 h-40 bg-indigo-600/20 rounded-full blur-3xl"></div>
             <div class="absolute -bottom-12 -left-12 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
             
             <div class="flex items-center gap-4 mb-6">
                 <div class="rounded-2xl h-14 w-14 bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-500/20">
-                    <svg class="w-7 h-7 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-7 h-7 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                     </svg>
                 </div>
                 <div>
                     <h3 class="text-xl font-bold text-white tracking-tight">✨ 捷徑傳送門已就緒</h3>
-                    <p class="text-xs text-slate-400 mt-0.5">點擊下方按鈕，即可瞬間開啟您的目標網頁</p>
+                    <p class="text-xs text-slate-400 mt-0.5">專屬短網址與 QR Code 已同步為您配置完成</p>
                 </div>
             </div>
 
-            <!-- 網址詳細資料面板 -->
-            <div class="space-y-4 mb-8 bg-slate-950/80 p-5 rounded-2xl border border-slate-800/80 font-mono text-xs relative">
-                <div>
-                    <span class="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">專屬識別代碼</span>
-                    <span id="redirect-code" class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-extrabold text-base">#------</span>
-                </div>
-                <div class="border-t border-slate-900 pt-4">
-                    <span class="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">原始目標網址</span>
-                    <p id="redirect-target" class="text-slate-300 break-all select-all font-medium text-[11px] leading-relaxed"></p>
-                </div>
-                <div id="redirect-tinyurl-container" class="border-t border-slate-900 pt-4 hidden">
-                    <span class="text-emerald-400 font-bold block mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                        🌐 全網通行雲端短網址
-                    </span>
-                    <div class="flex items-center justify-between gap-2 mt-1.5 bg-slate-900/50 p-2 rounded-lg border border-slate-800/60">
-                        <span id="redirect-tinyurl" class="text-emerald-400 break-all select-all font-bold"></span>
-                        <button id="copy-tiny-btn" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded-md transition shrink-0 active:scale-95 font-sans">複製</button>
+            <!-- 雙欄版面：左側網址資訊，右側 QR Code -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- 左側：網址詳細資料面板 (佔 2 欄) -->
+                <div class="md:col-span-2 space-y-4 bg-slate-950/80 p-5 rounded-2xl border border-slate-800/80 font-mono text-xs flex flex-col justify-between">
+                    <div>
+                        <span class="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">專屬識別代碼</span>
+                        <span id="redirect-code" class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-extrabold text-base">#------</span>
                     </div>
+                    <div class="border-t border-slate-900 pt-3">
+                        <span class="text-slate-500 block mb-1 uppercase tracking-wider text-[10px]">原始目標長網址</span>
+                        <p id="redirect-target" class="text-slate-300 break-all select-all font-medium text-[11px] leading-relaxed max-h-[60px] overflow-y-auto no-scrollbar"></p>
+                    </div>
+                    <div id="redirect-tinyurl-container" class="border-t border-slate-900 pt-3 hidden">
+                        <span class="text-emerald-400 font-bold block mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            🌐 全網通行雲端短網址 (優先分享)
+                        </span>
+                        <div class="flex items-center justify-between gap-2 mt-1 bg-slate-900/50 p-2 rounded-lg border border-slate-800/60">
+                            <span id="redirect-tinyurl" class="text-emerald-400 break-all select-all font-bold text-[11px]"></span>
+                            <button id="copy-tiny-btn" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded transition shrink-0 active:scale-95 font-sans">複製</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側：QR Code 繪製與下載區 (佔 1 欄) -->
+                <div class="bg-slate-950/40 border border-slate-800/60 p-4 rounded-2xl flex flex-col items-center justify-center text-center gap-2">
+                    <span class="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">行動掃碼分享</span>
+                    <!-- QR 碼容器 (移除 problematic 的獨立按鈕，將 click 綁定在容器上) -->
+                    <div id="qr-wrapper" class="p-2 bg-white rounded-xl shadow-inner inline-flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all duration-200" title="點擊嘗試下載圖片">
+                        <div id="redirect-qrcode"></div>
+                    </div>
+                    <!-- 貼心提示（用於解決沙盒環境無法下載的情況） -->
+                    <span class="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        點擊 QR 碼下載，或在圖片上<br>
+                        <span class="text-indigo-400 font-bold">按右鍵 / 長按</span> 即可儲存圖檔
+                    </span>
                 </div>
             </div>
 
             <!-- 操作按鈕區 -->
-            <div class="flex flex-col sm:flex-row gap-3 justify-end">
-                <button id="redirect-cancel" class="order-2 sm:order-1 px-5 py-3.5 bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition text-sm font-medium">
+            <div class="flex flex-col sm:flex-row gap-3 justify-end border-t border-slate-800/50 pt-4">
+                <button id="redirect-cancel" class="order-2 sm:order-1 px-5 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition text-sm font-medium">
                     返回管理庫
                 </button>
-                <a id="redirect-direct-link" href="#" target="_blank" rel="noopener noreferrer" class="order-1 sm:order-2 px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl transition text-sm text-center shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 flex items-center justify-center gap-2">
+                <a id="redirect-direct-link" href="#" target="_blank" rel="noopener noreferrer" class="order-1 sm:order-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl transition text-sm text-center shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 flex items-center justify-center gap-2">
                     <span>搭乘傳送門前往</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                 </a>
@@ -116,7 +139,7 @@
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                             <!-- 連結 標誌 -->
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 00-5.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                         </div>
                         <input type="url" id="long-url" required placeholder="https://example.com/very/long/path/here" 
                             class="w-full pl-11 pr-4 py-3.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm">
@@ -156,7 +179,7 @@
                 <div class="relative">
                     <button type="submit" id="submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-4 px-6 rounded-xl transition duration-200 shadow-lg shadow-indigo-600/10 hover:shadow-indigo-500/20 flex items-center justify-center gap-2">
                         <span id="btn-text">建立縮網址</span>
-                        <svg id="btn-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        <svg id="btn-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                         <svg id="btn-spinner" class="w-4 h-4 animate-spin hidden" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -185,9 +208,9 @@
                     <table class="w-full text-left border-collapse table-fixed">
                         <thead>
                             <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs font-semibold tracking-wider uppercase">
-                                <th class="py-3 px-4 w-[35%]">本機/雲端連結 (點擊安全測試)</th>
+                                <th class="py-3 px-4 w-[30%]">本機/雲端連結 (點擊安全測試)</th>
                                 <th class="py-3 px-4 w-[45%]">原始長網址</th>
-                                <th class="py-3 px-4 w-[20%] text-center">操作</th>
+                                <th class="py-3 px-4 w-[25%] text-center">操作</th>
                             </tr>
                         </thead>
                         <tbody id="url-list" class="divide-y divide-slate-900/50 text-sm">
@@ -199,9 +222,9 @@
                 <!-- 無資料畫面 -->
                 <div id="no-data" class="flex flex-col items-center justify-center py-12 px-4 text-center">
                     <div class="p-3 bg-slate-900/60 rounded-full text-slate-600 mb-3 border border-slate-800">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 00-5.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                     </div>
-                    <p class="text-slate-400 text-sm font-medium">目前尚無任何紀錄</p>
+                    <p class="text-slate-400 text-sm font-medium">目前尚無 any 紀錄</p>
                     <p class="text-slate-500 text-xs mt-1">在上方輸入網址，即可在本地與雲端同時建立連結！</p>
                 </div>
             </div>
@@ -211,7 +234,7 @@
     <!-- 底部資訊 (包含：版本資訊、製作團隊、版權警語、Updated Date) -->
     <footer class="text-center py-8 text-xs text-slate-500 border-t border-slate-900/50 max-w-4xl w-full mx-auto px-4 space-y-2">
         <div class="flex flex-wrap justify-center items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-400">
-            <span class="bg-indigo-500/10 px-2 py-0.5 rounded text-indigo-400 border border-indigo-500/20">Version 2.3.0</span>
+            <span class="bg-indigo-500/10 px-2 py-0.5 rounded text-indigo-400 border border-indigo-500/20">Version 2.4.0</span>
             <span class="text-slate-800">•</span>
             <span class="font-medium text-slate-300">製作: AI練習曲</span>
             <span class="text-slate-800">•</span>
@@ -219,7 +242,7 @@
             <span class="text-slate-800">•</span>
             <span class="font-mono text-slate-400">Updated: Jun.20, 2026</span>
         </div>
-        <p class="text-[10px] text-slate-600 pt-1">© 2026 隨身雙效縮網址. Powered by HTML5 LocalStorage & GoTiny / Spoo.me API.</p>
+        <p class="text-[10px] text-slate-600 pt-1">© 2026 隨身雙效縮網址. Powered by HTML5 LocalStorage & QRCode Engine.</p>
     </footer>
 
     <script>
@@ -355,7 +378,7 @@
                         if (response.ok) {
                             const data = await response.json();
                             if (Array.isArray(data) && data[0] && data[0].short) {
-                                return data[0].short;
+                                return `https://gotiny.cc/ro/${data[0].short}`;
                             }
                         }
                         return null;
@@ -422,7 +445,7 @@
             return null;
         }
 
-        // 4. 觸發安全跳轉確認流程 (防沙盒干擾)
+        // 4. 觸發安全跳轉確認流程 (防沙盒干擾，並整合 QR Code 渲染與安全下載)
         function triggerSafeRedirect(code) {
             const db = getStorage();
             const record = db[code];
@@ -431,6 +454,7 @@
             // 相容舊資料格式
             const longUrl = typeof record === 'string' ? record : record.longUrl;
             const tinyUrl = typeof record === 'object' ? record.tinyUrl : null;
+            const localShortUrl = `${getBasePath()}#${code}`;
 
             const overlay = document.getElementById('redirect-screen');
             const codeLabel = document.getElementById('redirect-code');
@@ -439,10 +463,14 @@
             const tinyUrlContainer = document.getElementById('redirect-tinyurl-container');
             const tinyUrlLabel = document.getElementById('redirect-tinyurl');
             const copyTinyBtn = document.getElementById('copy-tiny-btn');
+            const qrContainer = document.getElementById('redirect-qrcode');
 
             codeLabel.textContent = `#${code}`;
             targetLabel.textContent = longUrl;
             directLink.href = longUrl;
+
+            // 決定要綁定到 QR Code 的目標網址 (優先選用全網通行的雲端短連結)
+            const finalShareUrl = tinyUrl || localShortUrl;
 
             if (tinyUrl) {
                 tinyUrlContainer.classList.remove('hidden');
@@ -451,6 +479,40 @@
             } else {
                 tinyUrlContainer.classList.add('hidden');
             }
+
+            // 清空舊的 QR 碼並重新在本機端渲染
+            qrContainer.innerHTML = '';
+            const qrcode = new QRCode(qrContainer, {
+                text: finalShareUrl,
+                width: 130,
+                height: 130,
+                colorDark: "#0f172a", // slate-900 暗色塊
+                colorLight: "#ffffff", // 背景純白
+                correctLevel: QRCode.CorrectLevel.H // 高容錯率
+            });
+
+            // 設定 QR Code 點擊安全下載 (相容沙盒機制：將 DOM 節點短暫掛載，如被 iframe 攔截，則由右鍵儲存補足)
+            setTimeout(() => {
+                const qrImg = qrContainer.querySelector('img');
+                const qrWrapper = document.getElementById('qr-wrapper');
+                
+                if (qrImg && qrWrapper) {
+                    qrWrapper.onclick = () => {
+                        try {
+                            const a = document.createElement('a');
+                            a.href = qrImg.src;
+                            a.download = `qrcode-${code}.png`;
+                            // 暫時將 A 標籤掛載至主體，避開大部分沙盒環境限制
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            showToast('已觸發下載！若無反應請在圖片上點選右鍵或長按儲存。', 'success');
+                        } catch (err) {
+                            showToast('受沙盒限制，請直接按右鍵或長按圖片進行儲存。', 'info');
+                        }
+                    };
+                }
+            }, 300); // 稍微增加延遲確保 QRCode.js 的 <img> 已經生成完畢
 
             overlay.classList.remove('hidden');
 
@@ -498,14 +560,12 @@
                 tr.innerHTML = `
                     <td class="py-4 px-4 font-mono font-medium text-indigo-400 break-all select-none">
                         <div class="flex flex-col gap-1.5">
-                            <!-- 本機離線短網址測試 -->
                             <button onclick="triggerSafeRedirect('${code}')" class="text-left text-xs font-semibold hover:text-indigo-300 text-indigo-400 flex items-center gap-1">
                                 <span class="bg-indigo-500/10 px-1 py-0.5 rounded text-[10px] border border-indigo-500/20 font-sans">本機離線</span>
                                 <span class="truncate max-w-[150px] sm:max-w-[200px]">#${code}</span>
                                 <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                             </button>
 
-                            <!-- 雲端真實短網址 -->
                             ${tinyUrl ? `
                             <div class="flex items-center gap-1.5 text-[11px]">
                                 <span class="bg-emerald-500/10 text-emerald-400 px-1 py-0.5 rounded text-[10px] border border-emerald-500/20 font-sans">雲端分享</span>
@@ -523,10 +583,23 @@
                     </td>
                     <td class="py-4 px-4 text-center">
                         <div class="flex items-center justify-center gap-1.5">
-                            <button onclick="copyToClipboard('${tinyUrl || localShortUrl}')" class="px-2 py-1 text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 hover:text-indigo-400 text-slate-300 rounded-lg transition border border-slate-800">
+                            <!-- 複製按鈕 -->
+                            <button onclick="copyToClipboard('${tinyUrl || localShortUrl}')" class="px-2 py-1 text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 hover:text-indigo-400 text-slate-300 rounded-lg transition border border-slate-800" title="複製縮網址">
                                 複製
                             </button>
-                            <button onclick="deleteShortCode('${code}')" class="px-2 py-1 text-[11px] font-semibold hover:bg-rose-500/10 hover:text-rose-400 text-slate-600 rounded-lg transition">
+                            <!-- QR Code 重新喚醒按鈕 -->
+                            <button onclick="triggerSafeRedirect('${code}')" class="px-2 py-1 text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 hover:text-emerald-400 text-slate-300 rounded-lg transition border border-slate-800 flex items-center gap-1" title="顯示此網址的 QR Code">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                  <rect x="3" y="3" width="6" height="6" rx="1" />
+                                  <rect x="15" y="3" width="6" height="6" rx="1" />
+                                  <rect x="15" y="15" width="6" height="6" rx="1" />
+                                  <rect x="3" y="15" width="6" height="6" rx="1" />
+                                  <path d="M7 7h.01M17 7h.01M17 17h.01M7 17h.01" />
+                                </svg>
+                                QR 碼
+                            </button>
+                            <!-- 刪除按鈕 -->
+                            <button onclick="deleteShortCode('${code}')" class="px-2 py-1 text-[11px] font-semibold hover:bg-rose-500/10 hover:text-rose-400 text-slate-600 rounded-lg transition" title="移除此紀錄">
                                 刪除
                             </button>
                         </div>
@@ -587,7 +660,7 @@
             function setSubmitting(isSubmitting) {
                 if (isSubmitting) {
                     submitBtn.disabled = true;
-                    btnText.textContent = '正在產生縮網址並連接極光傳送網...';
+                    btnText.textContent = '正在產生縮網址並同步繪製 QR 碼...';
                     btnIcon.classList.add('hidden');
                     btnSpinner.classList.remove('hidden');
                 } else {
@@ -657,7 +730,9 @@
                 customCodeInput.value = '';
                 
                 renderHistoryList();
-                showToast(`縮網址 #${code} 建立完成！`, 'success');
+                
+                // 自動幫使用者彈出傳送門，展示成果與剛剛產生的 QR Code
+                triggerSafeRedirect(code);
             });
 
             // 清空所有資料
