@@ -19,6 +19,7 @@
         .sticky-right { position: sticky; right: 0; background-color: white; z-index: 5; border-left: 2px solid #e2e8f0; }
         tr:hover .sticky-col, tr:hover .sticky-right { background-color: #f1f5f9; }
         .cell-empty { background-color: #fff1f2; color: #e11d48; }
+        .cell-no-slot { background-color: #f1f5f9; color: #94a3b8; font-style: italic; font-size: 11px; cursor: not-allowed; }
         .filling-animation { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
         .no-split-badge { background-color: #fee2e2; color: #b91c1c; font-size: 9px; padding: 1px 3px; border-radius: 3px; display: inline-block; }
@@ -39,17 +40,17 @@
                         <i data-lucide="calendar" class="text-indigo-600 w-8 h-8"></i>
                         AI 排課幫手
                     </h1>
-                    <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded uppercase">v3.8.0 智慧避撞版</span>
+                    <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded uppercase">v3.9.0 智慧年級節數版</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 text-sm">
                     <span class="flex items-center gap-1 font-medium"><i data-lucide="code" class="w-3.5 h-3.5"></i> 製作: AI練習曲</span>
                     <span class="flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> 歡迎分享，請勿商用</span>
-                    <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> Updated: Jun. 27, 2026</span>
+                    <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> Updated: Jul. 17, 2026</span>
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
                 <button onclick="downloadTemplate()" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-sm text-slate-700">
-                    <i data-lucide="download" class="w-4 h-4"></i> 下載場所與排除排除範本
+                    <i data-lucide="download" class="w-4 h-4"></i> 下載年級自訂節數範本
                 </button>
                 <button id="resetBtn" onclick="resetApp()" class="hidden flex items-center gap-2 px-5 py-2.5 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i> 重新開始
@@ -71,14 +72,14 @@
                         <i data-lucide="file-up" class="text-indigo-600 w-10 h-10"></i>
                     </div>
                     <h3 class="text-xl font-bold text-slate-800 mb-2">上傳您的排課 Excel</h3>
-                    <p class="text-slate-500 text-sm italic">v3.8.0 支援全新「教師排除上課時段設定」與場所防撞限制</p>
+                    <p class="text-slate-500 text-sm italic">v3.9.0 支援「各年級每日節數自訂」與「教師不克上課反向排除設定」</p>
                     <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" onchange="handleFile(this)">
                 </div>
             </div>
 
             <div id="dataSummary" class="hidden p-8 grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in">
                 <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                    <p class="text-xs font-bold text-slate-400 uppercase mb-1">班級可用總時段</p>
+                    <p class="text-xs font-bold text-slate-400 uppercase mb-1">班級可用總時段 (總和)</p>
                     <p id="sumSlots" class="text-2xl font-bold text-slate-800">0</p>
                 </div>
                 <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
@@ -136,7 +137,7 @@
                 </div>
             </section>
 
-            <!-- 共用教室借用總表 (動態呈現) -->
+            <!-- 共用教室借用總表 (場所防撞) -->
             <section id="classroomSection" class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden hidden">
                 <div class="bg-slate-800 px-6 py-4 flex items-center justify-between text-white">
                     <h2 class="font-semibold flex items-center gap-3 text-lg">
@@ -172,9 +173,9 @@
         <!-- Footer -->
         <footer class="mt-20 border-t border-slate-200 pt-8 pb-12 text-center space-y-4">
             <div class="flex justify-center items-center gap-6 text-slate-400">
-                <span class="text-xs">Version: v3.8.0 (場所防撞版)</span>
+                <span class="text-xs">Version: v3.9.0 (自訂年級節數版)</span>
                 <span class="text-xs">製作: AI練習曲</span>
-                <span class="text-xs">Updated: Jun. 27, 2026</span>
+                <span class="text-xs">Updated: Jul. 17, 2026</span>
             </div>
             <p class="text-slate-400 text-[10px] tracking-widest uppercase">歡迎分享，請勿商用 &copy; 2026 AI SCHEDULER HELPER</p>
         </footer>
@@ -203,7 +204,7 @@
 
         lucide.createIcons();
 
-        // 智慧通知提示，完全取代原生 alert() 避免被沙盒阻擋
+        // 智慧型彈出通知，替代 alert
         function showNotification(message, type = 'error') {
             const toast = document.createElement('div');
             toast.className = `fixed bottom-5 right-5 z-[200] p-4 rounded-xl shadow-xl border text-white transition-all transform translate-y-10 opacity-0 ${type === 'error' ? 'bg-rose-600 border-rose-500' : 'bg-emerald-600 border-emerald-500'}`;
@@ -216,15 +217,15 @@
             setTimeout(() => {
                 toast.classList.add('translate-y-10', 'opacity-0');
                 setTimeout(() => toast.remove(), 500);
-            }, 4500);
+            }, 4000);
         }
 
-        // 輔助函數：智慧型欄位存取器，自動去空白、不限大小寫，且支援多關鍵字比對
+        // 智慧型欄位讀取與容錯
         function getLooseValue(row, possibleKeys, fallback = "") {
             if (!row) return fallback;
             for (let k of possibleKeys) {
                 const foundKey = Object.keys(row).find(rk => {
-                    const cleanKey = rk.replace(/\s/g, ''); // 移除 Excel 欄位名稱中的所有空格
+                    const cleanKey = rk.replace(/\s/g, ''); 
                     return cleanKey.includes(k) || k.includes(cleanKey);
                 });
                 if (foundKey !== undefined) {
@@ -233,6 +234,10 @@
                 }
             }
             return fallback;
+        }
+
+        function cleanGrade(g) {
+            return String(g || "").trim().replace(/\s/g, "");
         }
 
         // --- Data Handling ---
@@ -258,7 +263,7 @@
                         classrooms: getSheet(["共用教室設定", "教室設定", "共用教室"]) || [],
                         constraints: getSheet(["教師不可排課時間", "不可排課", "不克上課", "不克排課", "教師可用時間", "可用"]) || []
                     };
-                    if(!rawData.basic || !rawData.classes || !rawData.teachers) throw new Error("缺少必要的 Sheet 工作表");
+                    if(!rawData.basic || !rawData.classes || !rawData.teachers) throw new Error("缺少必要的 Sheet 工作分頁");
                     validateData();
                 } catch (err) { 
                     showNotification("讀取失敗: " + err.message, "error"); 
@@ -267,14 +272,45 @@
             reader.readAsArrayBuffer(file);
         }
 
-        function validateData() {
-            const totalSlots = rawData.basic.reduce((acc, curr) => acc + (parseInt(getLooseValue(curr, ["節數"])) || 0), 0);
+        // 核心邏輯：計算特定星期幾，對應年級應上幾節課
+        function getPeriodsForGrade(day, grade) {
+            const cleanG = cleanGrade(grade);
             
-            // 智慧對位班級與老師 (消除空格影響)
+            // 1. 先找專屬特定年級的限制 (例如 一年級-星期二)
+            let match = rawData.basic.find(b => {
+                const bDay = getLooseValue(b, ["星期", "天"]);
+                const bGrade = getLooseValue(b, ["年級", "級別", "適用年級"]);
+                return bDay === day && cleanGrade(bGrade) === cleanG && cleanG !== "";
+            });
+            if (match) return parseInt(getLooseValue(match, ["節數"])) || 0;
+
+            // 2. 找不到的話，尋找全校通用的預設限制 (標記為全校、全部、或空白)
+            match = rawData.basic.find(b => {
+                const bDay = getLooseValue(b, ["星期", "天"]);
+                const bGrade = getLooseValue(b, ["年級", "級別", "適用年級"]);
+                return bDay === day && (cleanGrade(bGrade) === "" || cleanGrade(bGrade) === "全校" || cleanGrade(bGrade) === "全部");
+            });
+            if (match) return parseInt(getLooseValue(match, ["節數"])) || 0;
+
+            return 7; // 最底層預設防呆
+        }
+
+        function validateData() {
             const classCodes = [...new Set(rawData.classes.map(c => getLooseValue(c, ["班級代碼", "班級代號", "代碼"])))].filter(c => c !== "");
             const teacherNames = [...new Set(rawData.teachers.map(t => getLooseValue(t, ["教師姓名", "教師", "姓名"])))].filter(t => t !== "");
             
-            // 計算共用教室個數
+            // 計算各班可用時段總和
+            let totalAvailableSlots = 0;
+            const uniqueDays = [...new Set(rawData.basic.map(b => getLooseValue(b, ["星期", "天"])))].filter(d => d !== "");
+            
+            classCodes.forEach(c => {
+                const classRow = rawData.classes.find(x => getLooseValue(x, ["班級代碼", "班級代號", "代碼"]) === c);
+                const cGrade = getLooseValue(classRow, ["年級", "級別", "適用年級"]);
+                uniqueDays.forEach(day => {
+                    totalAvailableSlots += getPeriodsForGrade(day, cGrade);
+                });
+            });
+
             const uniqueRooms = new Set();
             rawData.teachers.forEach(t => {
                 const rm = getLooseValue(t, ["使用共用教室", "共用教室", "專用教室", "場所", "教室"]);
@@ -289,10 +325,10 @@
             document.getElementById('dataSummary').classList.remove('hidden');
             document.getElementById('step2').classList.remove('hidden');
             document.getElementById('resetBtn').classList.remove('hidden');
-            document.getElementById('sumSlots').innerText = totalSlots;
+            document.getElementById('sumSlots').innerText = totalAvailableSlots;
             document.getElementById('sumCount').innerText = `${classCodes.length} 班 / ${teacherNames.length} 師 / ${uniqueRooms.size} 房`;
-            document.getElementById('validationMsg').innerText = "數據診斷完成（已載入場所與不克上課限制）";
-            showNotification("檔案上傳成功，排課資料已診斷就緒！", "success");
+            document.getElementById('validationMsg').innerText = "數據診斷正常 (已支援年級自訂節數)";
+            showNotification("檔案上傳診斷完成！", "success");
             lucide.createIcons();
         }
 
@@ -304,35 +340,59 @@
             lucide.createIcons();
         }
 
-        // --- Core Optimizer with Shared Classroom Constraints and Teacher Exclusions ---
+        // --- Core Optimizer with Grade Specific Slots and Exclusions ---
         async function runScheduler() {
             const loader = document.getElementById('loading');
             const progress = document.getElementById('progressBar');
             loader.style.display = 'flex';
             
-            // 建立基本時段
-            const timeSlots = [];
-            rawData.basic.forEach(day => {
-                const count = parseInt(getLooseValue(day, ["節數"])) || 0;
-                const weekDay = getLooseValue(day, ["星期", "天"]);
-                for(let i=1; i<=count; i++) {
-                    timeSlots.push({ day: weekDay, period: i, id: `${weekDay}-${i}` });
+            const allClasses = [...new Set(rawData.classes.map(c => getLooseValue(c, ["班級代碼", "班級代號", "代碼"])))].filter(c => c !== "");
+            const allTeachers = [...new Set(rawData.teachers.map(t => getLooseValue(t, ["教師姓名", "教師", "姓名"])))].filter(t => t !== "");
+            const uniqueDays = [...new Set(rawData.basic.map(b => getLooseValue(b, ["星期", "天"])))].filter(d => d !== "");
+
+            // 1. 為每個班級建立專屬時段清單 classTimeSlots[classCode] = Array of { day, period, id }
+            const classTimeSlots = {};
+            allClasses.forEach(c => {
+                classTimeSlots[c] = [];
+                const classRow = rawData.classes.find(x => getLooseValue(x, ["班級代碼", "班級代號", "代碼"]) === c);
+                const cGrade = getLooseValue(classRow, ["年級", "級別", "適用年級"]);
+                
+                uniqueDays.forEach(day => {
+                    const periods = getPeriodsForGrade(day, cGrade);
+                    for (let i = 1; i <= periods; i++) {
+                        classTimeSlots[c].push({ day, period: i, id: `${day}-${i}` });
+                    }
+                });
+            });
+
+            // 2. 為了在畫面上統一繪製總表，建立「全校最大聯集時段表」
+            const maxPeriodsPerDay = {};
+            rawData.basic.forEach(b => {
+                const day = getLooseValue(b, ["星期", "天"]);
+                const p = parseInt(getLooseValue(b, ["節數"])) || 0;
+                if (day) {
+                    maxPeriodsPerDay[day] = Math.max(maxPeriodsPerDay[day] || 0, p);
                 }
             });
 
-            // 強力去空格格式化所有代碼、名稱
-            const allClasses = [...new Set(rawData.classes.map(c => getLooseValue(c, ["班級代碼", "班級代號", "代碼"])))].filter(c => c !== "");
-            const allTeachers = [...new Set(rawData.teachers.map(t => getLooseValue(t, ["教師姓名", "教師", "姓名"])))].filter(t => t !== "");
+            const timeSlots = [];
+            const daySortOrder = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+            const foundDays = Object.keys(maxPeriodsPerDay);
+            const sortedDays = daySortOrder.filter(d => foundDays.includes(d)).concat(foundDays.filter(d => !daySortOrder.includes(d)));
             
-            // 【反向設定】載入教師不克上課排除時間
+            sortedDays.forEach(day => {
+                const maxP = maxPeriodsPerDay[day];
+                for (let i = 1; i <= maxP; i++) {
+                    timeSlots.push({ day, period: i, id: `${day}-${i}` });
+                }
+            });
+
+            // 3. 【反向排除】載入教師不克排課排除時間
             const teacherBlocks = {};
             rawData.constraints.forEach(c => { 
                 const tName = getLooseValue(c, ["教師姓名", "教師", "姓名"]);
                 if(tName) {
-                    if (!teacherBlocks[tName]) {
-                        teacherBlocks[tName] = new Set();
-                    }
-                    // 獲取不克排課時段欄位值（如：星期一-3,星期二-全）
+                    if (!teacherBlocks[tName]) teacherBlocks[tName] = new Set();
                     const rawVal = getLooseValue(c, ["不可排課時段", "不克排課時段", "限制時段", "時間", "可用星期"]);
                     const tokens = String(rawVal || "").split(/[，,]/).map(d => d.trim()).filter(d => d.length > 0);
                     
@@ -349,7 +409,6 @@
                                 teacherBlocks[tName].add(`${day}-${period}`);
                             }
                         } else {
-                            // 若無破折號，整天排除 (例如: "星期二")
                             timeSlots.forEach(s => {
                                 if (s.day === tok) teacherBlocks[tName].add(s.id);
                             });
@@ -358,14 +417,12 @@
                 }
             });
 
-            // 載入共用教室容納上限 (預設容納 1 班)
+            // 4. 載入共用教室容納上限
             const classroomCapacities = {};
             rawData.classrooms.forEach(cr => {
                 const name = getLooseValue(cr, ["教室名稱", "名稱", "教室"]);
                 const cap = parseInt(getLooseValue(cr, ["容納班級數", "容納", "班級數", "上限"])) || 1;
-                if (name) {
-                    classroomCapacities[name] = cap;
-                }
+                if (name) classroomCapacities[name] = cap;
             });
 
             const teacherTaskCount = {};
@@ -376,33 +433,34 @@
 
             let bestSolution = null; 
             let maxFilled = -1;
-            const totalTargets = timeSlots.length * allClasses.length;
+            
+            // 計算總目標配對數
+            let totalTargets = 0;
+            allClasses.forEach(c => totalTargets += classTimeSlots[c].length);
 
-            // 進行隨機優化迭代
+            // 5. 優化核心隨機迭代演算法
             for (let attempt = 1; attempt <= 300; attempt++) {
                 if (attempt % 30 === 0) progress.style.width = (attempt/300*100) + '%';
                 if (attempt % 10 === 0) await new Promise(r => setTimeout(r, 1));
                 
                 const classSched = {}; 
                 const teacherSched = {};
-                // classroomUsage[slotId][classroomName] = 被借用的次數
                 const classroomUsage = {}; 
 
                 allClasses.forEach(c => classSched[c] = {});
                 allTeachers.forEach(t => teacherSched[t] = {});
                 timeSlots.forEach(s => classroomUsage[s.id] = {});
 
-                // 處理「已鎖定班級」的預排和場所預先佔用
+                // 處理鎖定班級
                 if (lockedClasses.size > 0 && scheduleResults) {
                     allClasses.forEach(c => { 
                         if (lockedClasses.has(c)) { 
-                            timeSlots.forEach(s => { 
+                            classTimeSlots[c].forEach(s => { 
                                 const e = scheduleResults.classSchedule[c][s.id]; 
                                 if (e) { 
                                     classSched[c][s.id] = { ...e }; 
                                     teacherSched[e.t][s.id] = { s: e.s, c: c }; 
                                     
-                                    // 重新查找該老師此課程是否使用共用教室
                                     const tObj = rawData.teachers.find(t => 
                                         getLooseValue(t, ["教師姓名", "教師", "姓名"]) === e.t && 
                                         getLooseValue(t, ["教授科目", "科目"]) === e.s && 
@@ -420,7 +478,7 @@
                     });
                 }
 
-                // 智慧欄位抓取任務清單
+                // 智慧任務比重權衡
                 const tasks = rawData.teachers.map(t => {
                     const tName = getLooseValue(t, ["教師姓名", "教師", "姓名"]);
                     const tClassCode = getLooseValue(t, ["教授班級代碼", "班級代碼", "班級代號", "班級"]);
@@ -435,7 +493,6 @@
                     const room = getLooseValue(t, ["使用共用教室", "共用教室", "專用教室", "場所", "教室"]);
                     const hasRoom = room && room.length > 0;
                     
-                    // 優化權重，不可排課時段不在此做正向權重，改採硬性拒絕
                     let score = (teacherBlocks[tName]?.size > 0 ? 100000000 : 0) 
                               + (tNoSplit.toUpperCase() === 'Y' ? 50000000 : 0) 
                               + (hasRoom ? 30000000 : 0) 
@@ -454,7 +511,7 @@
                     };
                 }).filter(t => t.remain > 0).sort((a, b) => b.priority - a.priority);
 
-                // 核心防撞排入邏輯
+                // 單一班級填入邏輯 (排外/排除場所)
                 const tryPlace = (task, isDouble) => {
                     if (isDouble && (task.remain < 2 || (task["不可拆分 (Y/N)"].toUpperCase() !== 'Y' && attempt > 250))) return;
                     const blocks = teacherBlocks[task.教師姓名];
@@ -462,13 +519,12 @@
 
                     while (isDouble ? task.remain >= 2 : task.remain > 0) {
                         let placed = false; 
-                        const searchOrder = [...timeSlots].sort(() => Math.random() - 0.5);
+                        // 只在該班級的合法時段清單內進行搜尋
+                        const searchOrder = [...classTimeSlots[task.教授班級代碼]].sort(() => Math.random() - 0.5);
                         
                         for (let s1 of searchOrder) {
-                            // 【反向避撞】若此時段是教師被封鎖的不克上課時間，直接略過
                             if (blocks && blocks.has(s1.id)) continue;
 
-                            // 檢查 s1 的共用教室借用上限
                             if (targetRoom) {
                                 const cap = classroomCapacities[targetRoom] || 1;
                                 const used = classroomUsage[s1.id][targetRoom] || 0;
@@ -476,13 +532,10 @@
                             }
 
                             if (isDouble) {
-                                const s2 = timeSlots.find(ts => ts.day === s1.day && ts.period === s1.period + 1);
+                                const s2 = classTimeSlots[task.教授班級代碼].find(ts => ts.day === s1.day && ts.period === s1.period + 1);
                                 if (!s2) continue;
-
-                                // 【反向避撞】第二節也必須是教師可以上課的時間
                                 if (blocks && blocks.has(s2.id)) continue;
 
-                                // 檢查 s2 的共用教室借用上限
                                 if (targetRoom) {
                                     const cap = classroomCapacities[targetRoom] || 1;
                                     const used2 = classroomUsage[s2.id][targetRoom] || 0;
@@ -537,14 +590,17 @@
                     }
                 };
 
-                // 分流排入：不可拆分(雙節) -> 可拆分(雙節) -> 單節
+                // 分流：強制雙節 -> 可選雙節 -> 單節
                 tasks.filter(t => t["不可拆分 (Y/N)"].toUpperCase() === 'Y').forEach(t => tryPlace(t, true));
                 tasks.filter(t => t["不可拆分 (Y/N)"].toUpperCase() !== 'Y').forEach(t => tryPlace(t, true));
                 tasks.forEach(t => tryPlace(t, false));
 
-                // 統計此輪填充率
+                // 填入總計
                 let currentFilled = 0; 
-                allClasses.forEach(c => timeSlots.forEach(s => { if(classSched[c][s.id]) currentFilled++; }));
+                allClasses.forEach(c => {
+                    classTimeSlots[c].forEach(s => { if(classSched[c][s.id]) currentFilled++; });
+                });
+
                 if (currentFilled > maxFilled) {
                     maxFilled = currentFilled;
                     bestSolution = { 
@@ -558,7 +614,7 @@
                 tasks.forEach(t => { if(t.remain > 0) conflictHistory[t.taskId] = (conflictHistory[t.taskId] || 0) + 1; });
             }
 
-            // 統整場所名稱
+            // 統整專用場所結構
             const referencedClassrooms = new Set();
             rawData.teachers.forEach(t => {
                 const room = getLooseValue(t, ["使用共用教室", "共用教室", "專用教室", "場所", "教室"]);
@@ -570,7 +626,6 @@
             });
             const sortedClassrooms = Array.from(referencedClassrooms).sort();
 
-            // 建立共用教室專用對照
             const classroomSchedObj = {};
             sortedClassrooms.forEach(r => {
                 classroomSchedObj[r] = {};
@@ -578,7 +633,7 @@
             });
 
             allClasses.forEach(c => {
-                timeSlots.forEach(s => {
+                classTimeSlots[c].forEach(s => {
                     const e = bestSolution.classSched[c][s.id];
                     if (e) {
                         const tObj = rawData.teachers.find(t => 
@@ -588,10 +643,8 @@
                         );
                         if (tObj) {
                             const room = getLooseValue(tObj, ["使用共用教室", "共用教室", "專用教室", "場所", "教室"]);
-                            if (room) {
-                                if (classroomSchedObj[room]) {
-                                    classroomSchedObj[room][s.id].push({ t: e.t, c: c, s: e.s });
-                                }
+                            if (room && classroomSchedObj[room]) {
+                                classroomSchedObj[room][s.id].push({ t: e.t, c: c, s: e.s });
                             }
                         }
                     }
@@ -600,6 +653,7 @@
 
             scheduleResults = {
                 timeSlots, 
+                classTimeSlots, // 儲存各班專屬合法時段
                 classSchedule: bestSolution.classSched, 
                 teacherSchedule: bestSolution.teacherSched,
                 classroomSchedule: classroomSchedObj,
@@ -607,7 +661,6 @@
                 sortedClassrooms,
                 missingTasks: bestSolution.missingTasks,
                 allClasses: allClasses.map(c => {
-                    // 對位比對移除前後隱形空格
                     const row = rawData.classes.find(x => {
                         const codeVal = getLooseValue(x, ["班級代碼", "班級代號", "代碼"]);
                         return codeVal && String(codeVal).trim() === String(c).trim();
@@ -616,7 +669,8 @@
                         code: c, 
                         name: getLooseValue(row, ["班級名稱", "班級"]) || c, 
                         shortName: getLooseValue(row, ["班級短稱", "短稱"]) || getLooseValue(row, ["班級名稱", "班級"]) || c,
-                        tName: getLooseValue(row, ["班導師", "導師", "老師"]) || ""
+                        tName: getLooseValue(row, ["班導師", "導師", "老師"]) || "",
+                        grade: getLooseValue(row, ["年級", "級別", "適用年級"]) || "全校"
                     };
                 }),
                 allTeachers: allTeachers.map(t => ({ name: t })),
@@ -630,13 +684,13 @@
             const rate = Math.round((maxFilled/totalTargets)*100);
             document.getElementById('fillRate').innerText = `填充率: ${rate}% (${maxFilled}/${totalTargets})`;
             document.getElementById('step1').classList.add('opacity-40');
-            showNotification("智慧排課演算完成！", "success");
+            showNotification("AI 智慧排課優化運算完成！", "success");
             lucide.createIcons();
         }
 
         function renderTables() {
             const classTable = document.getElementById('classTable');
-            const { timeSlots, allClasses, classSchedule, missingTasks, sortedClassrooms, classroomSchedule, classroomCapacities } = scheduleResults;
+            const { timeSlots, classTimeSlots, allClasses, classSchedule, missingTasks, sortedClassrooms, classroomSchedule, classroomCapacities } = scheduleResults;
             
             // 1. 班級總表
             let head = `<thead><tr class="bg-slate-100 border-b border-slate-200 text-slate-600"><th class="p-4 text-left border-r border-slate-200 font-bold sticky-col bg-slate-100 z-10 min-w-[140px]">班級 / 鎖定</th><th class="p-4 text-left border-r border-slate-200 font-bold bg-slate-50 min-w-[100px]">班導師</th>`;
@@ -652,11 +706,17 @@
                     </td><td class="p-4 text-slate-600 border-r border-slate-100">${cls.tName}</td>`;
                 
                 timeSlots.forEach(s => {
-                    const e = classSchedule[cls.code][s.id];
-                    const isHl = activeHighlight.type === 'teacher' && e?.t === activeHighlight.value;
-                    body += `<td class="p-3 text-center border-r border-slate-100 cursor-pointer cell-item ${!e ? 'cell-empty' : ''} ${isHl ? 'highlight-active' : ''}" onclick="toggleHighlight('teacher', '${e?.t}')">
-                        ${e ? `<b>${e.s}</b><br><span class="text-[10px] text-indigo-600">${e.t}</span>` : '<div class="text-[10px] font-bold opacity-30 filling-animation">待修復</div>'}
-                    </td>`;
+                    // 檢查此班級是否有此時段
+                    const hasSlot = classTimeSlots[cls.code].some(ts => ts.id === s.id);
+                    if (!hasSlot) {
+                        body += `<td class="p-3 text-center border-r border-slate-100 cell-no-slot select-none">不需排課</td>`;
+                    } else {
+                        const e = classSchedule[cls.code][s.id];
+                        const isHl = activeHighlight.type === 'teacher' && e?.t === activeHighlight.value;
+                        body += `<td class="p-3 text-center border-r border-slate-100 cursor-pointer cell-item ${!e ? 'cell-empty' : ''} ${isHl ? 'highlight-active' : ''}" onclick="toggleHighlight('teacher', '${e?.t}')">
+                            ${e ? `<b>${e.s}</b><br><span class="text-[10px] text-indigo-600">${e.t}</span>` : '<div class="text-[10px] font-bold opacity-30 filling-animation">待修復</div>'}
+                        </td>`;
+                    }
                 });
                 
                 const miss = missingTasks.filter(mt => mt.教授班級代碼 === cls.code);
@@ -735,30 +795,31 @@
         function downloadTemplate() {
             const wb = XLSX.utils.book_new();
             
-            // 1. 排課基本資料
+            // 1. 排課基本資料 (新增年級欄位，並加上 一年級週二只有 4 節 的範例)
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-                ["星期", "節數"], 
-                ["星期一", 7], 
-                ["星期二", 7], 
-                ["星期三", 7], 
-                ["星期四", 7], 
-                ["星期五", 7]
+                ["星期", "年級", "節數"], 
+                ["星期一", "全校", 7], 
+                ["星期二", "一年級", 4], // 一年級星期二只有 4 節 (低年級半天)
+                ["星期二", "全校", 7],   // 其他年級星期二維持上滿 7 節
+                ["星期三", "全校", 7], 
+                ["星期四", "全校", 7], 
+                ["星期五", "全校", 7]
             ]), "排課基本資料");
             
-            // 2. 班級明細
+            // 2. 班級明細 (新增年級欄位，與排課基本資料的年級設定對齊)
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-                ["班級名稱", "班級短稱", "班級代碼", "班導師", "科目", "節數", "不可拆分 (Y/N)"], 
-                ["小學五年級忠", "五忠", "C01", "陳導師", "國文", 7, "N"],
-                ["小學五年級孝", "五孝", "C02", "李導師", "國文", 7, "N"]
+                ["班級名稱", "班級短稱", "班級代碼", "班導師", "年級", "科目", "節數", "不可拆分 (Y/N)"], 
+                ["一年級甲班", "一甲", "C01", "陳導師", "一年級", "生活課", 4, "N"],
+                ["五年級忠班", "五忠", "C02", "李導師", "五年級", "國語文", 7, "N"]
             ]), "班級明細");
             
             // 3. 教師明細與專用場所
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
                 ["教師姓名", "教授科目", "教授班級代碼", "節數", "不可拆分 (Y/N)", "使用共用教室"], 
-                ["陳老師", "國文", "C01", 7, "N", ""],
-                ["黃老師", "國文", "C02", 7, "N", ""],
-                ["李老師", "電腦課", "C01", 2, "Y", "電腦教室"],
-                ["張老師", "資訊科學", "C02", 2, "Y", "電腦教室"],
+                ["陳老師", "生活課", "C01", 4, "N", ""],
+                ["李老師", "國語文", "C02", 7, "N", ""],
+                ["張老師", "資訊課", "C01", 2, "Y", "電腦教室"],
+                ["張老師", "資訊課", "C02", 2, "Y", "電腦教室"],
                 ["王老師", "音樂課", "C01", 1, "N", "視聽教室"],
                 ["林老師", "表演藝術", "C02", 1, "N", "視聽教室"]
             ]), "教師明細");
@@ -770,26 +831,34 @@
                 ["視聽教室", 2]  
             ]), "共用教室設定");
             
-            // 5. 【全新升級】教師不可上課時間設定 (反向排斥設定)
+            // 5. 反向排除設定
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
                 ["教師姓名", "不可排課時段 (逗號隔開)"], 
-                ["李老師", "星期一-3,星期一-4,星期五-全"],
-                ["陳老師", "星期三-5,星期三-6"]
+                ["陳老師", "星期二-3, 星期二-4"],
+                ["張老師", "星期一-全"]
             ]), "教師不可排課時間");
             
-            XLSX.writeFile(wb, "AI排課幫手_防撞排除規則範本_v3.8.0.xlsx");
-            showNotification("範本下載成功，請參考新版「教師不可排課時間」分頁", "success");
+            XLSX.writeFile(wb, "AI排課幫手_自訂年級節數與反向排除範本_v3.9.0.xlsx");
+            showNotification("範本下載成功，請參考內附的年級與排除說明", "success");
         }
 
         function exportToExcel() {
             const wb = XLSX.utils.book_new();
-            const { timeSlots, allClasses, allTeachers, classSchedule, teacherSchedule, classroomSchedule, sortedClassrooms, classroomCapacities, missingTasks } = scheduleResults;
+            const { timeSlots, classTimeSlots, allClasses, allTeachers, classSchedule, teacherSchedule, classroomSchedule, sortedClassrooms, classroomCapacities, missingTasks } = scheduleResults;
             
             // 1. 班級課程總表
             const cData = [["班級 / 時段", "班導師", ...timeSlots.map(s => `${s.day} 第${s.period}節`), "未排入明細"]];
             allClasses.forEach(cls => {
                 const row = [cls.name, cls.tName];
-                timeSlots.forEach(s => { const e = classSchedule[cls.code][s.id]; row.push(e ? `${e.s} (${e.t})` : ""); });
+                timeSlots.forEach(s => { 
+                    const hasSlot = classTimeSlots[cls.code].some(ts => ts.id === s.id);
+                    if (!hasSlot) {
+                        row.push("不需排課");
+                    } else {
+                        const e = classSchedule[cls.code][s.id]; 
+                        row.push(e ? `${e.s} (${e.t})` : ""); 
+                    }
+                });
                 row.push(missingTasks.filter(m => m.教授班級代碼 === cls.code).map(m => `${m.教授科目} (${m.教師姓名}) x${m.remain}`).join(", ") || "已全滿");
                 cData.push(row);
             });
@@ -831,14 +900,14 @@
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(crData), "場所借用總表");
             }
 
-            XLSX.writeFile(wb, `AI排課分析數據_場所排除防撞版_${new Date().toLocaleDateString()}.xlsx`);
-            showNotification("Excel 總表匯出成功！", "success");
+            XLSX.writeFile(wb, `AI排課分析數據_自訂年級防撞版_${new Date().toLocaleDateString()}.xlsx`);
+            showNotification("Excel 數據檔下載完成", "success");
         }
 
         function exportToStyledHtml() {
             if (!scheduleResults) return;
             const includeDetails = document.getElementById('includeDetailsInHtml').checked;
-            const { timeSlots, allClasses, classSchedule, teacherSchedule, classroomSchedule, sortedClassrooms, classroomCapacities, missingTasks } = scheduleResults;
+            const { timeSlots, classTimeSlots, allClasses, classSchedule, teacherSchedule, classroomSchedule, sortedClassrooms, classroomCapacities, missingTasks } = scheduleResults;
 
             const style = `<style>
                 body { font-family: 'Noto Sans TC', sans-serif; padding: 40px; color: #1e293b; background: white; } 
@@ -850,6 +919,7 @@
                 .sticky-col { font-weight: bold; background-color: #ffffff; text-align: left; padding-left: 10px; } 
                 .subject { font-weight: bold; color: #0f172a; font-size: 12px; } 
                 .info { color: #4f46e5; font-size: 10px; } 
+                .cell-noslot { background-color: #f1f5f9; color: #94a3b8; font-style: italic; font-size: 10px; }
                 .missing-badge { color: #991b1b; background-color: #fef2f2; font-size: 10px; padding: 2px 4px; border-radius: 4px; display: block; margin: 1px; border: 1px solid #fee2e2; } 
                 .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 20px; } 
                 @media print { body { padding: 0; } h1 { page-break-before: always; } h1:first-child { page-break-before: avoid; } table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
@@ -860,8 +930,13 @@
             allClasses.forEach(cls => {
                 let cells = `<td>${cls.name}</td><td>${cls.tName}</td>`;
                 timeSlots.forEach(s => {
-                    const e = classSchedule[cls.code][s.id];
-                    cells += `<td>${e ? `<span class="subject">${e.s}</span><br><span class="info">${e.t}</span>` : ""}</td>`;
+                    const hasSlot = classTimeSlots[cls.code].some(ts => ts.id === s.id);
+                    if (!hasSlot) {
+                        cells += `<td class="cell-noslot">不需排課</td>`;
+                    } else {
+                        const e = classSchedule[cls.code][s.id];
+                        cells += `<td>${e ? `<span class="subject">${e.s}</span><br><span class="info">${e.t}</span>` : ""}</td>`;
+                    }
                 });
                 if (includeDetails) {
                     const miss = missingTasks.filter(m => m.教授班級代碼 === cls.code);
@@ -951,9 +1026,9 @@
                 `;
             }
 
-            const blob = new Blob([`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AI 排課幫手 - 美化總表</title>${style}</head><body><div style="text-align:right; font-size: 10px; color: #cbd5e1;">報告產生時間: ${new Date().toLocaleString()}</div>${classHtml}${teacherHtml}${classroomHtml}<div class="footer">製作: AI練習曲 | Version: v3.8.0 | Updated: Jun. 27, 2026<br>歡迎分享，請勿商用 &copy; 2026 AI SCHEDULER HELPER</div></body></html>`], { type: 'text/html' });
-            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `AI排課正式總表_${new Date().getTime()}.html`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            showNotification("美化 HTML 檔案下載成功，可直接於瀏覽器列印或另存 PDF！", "success");
+            const blob = new Blob([`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AI 排課幫手 - 美化總表</title>${style}</head><body><div style="text-align:right; font-size: 10px; color: #cbd5e1;">報告產生時間: ${new Date().toLocaleString()}</div>${classHtml}${teacherHtml}${classroomHtml}<div class="footer">製作: AI練習曲 | Version: v3.9.0 | Updated: Jul. 17, 2026<br>歡迎分享，請勿商用 &copy; 2026 AI SCHEDULER HELPER</div></body></html>`], { type: 'text/html' });
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `AI排課正式總表_自訂節數版_${new Date().getTime()}.html`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            showNotification("HTML 美化列印檔下載成功！", "success");
         }
 
         // --- 安全的應用程式重置函數 ---
