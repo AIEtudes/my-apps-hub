@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 小說播播 - 文學朗讀小說閱讀器</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- JSZip for EPUB parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- OpenCC JS for Traditional / Simplified Chinese Conversion -->
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+    <!-- Google Fonts for Chinese Literary Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;600;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        book: {
+                            white: '#FAFAFA',
+                            cream: '#F7F3E8',
+                            kraft: '#EFE5CE',
+                            green: '#E2EBE0',
+                            ink: '#2B343B',
+                            charcoal: '#1A1C1E',
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['"Noto Serif TC"', 'PMingLiU', 'serif'],
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                        kai: ['Kaiti TC', 'DFKai-SB', 'BiauKai', '"Noto Serif TC"', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        /* Writing Mode utilities */
+        .vertical-text {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+        .horizontal-text {
+            writing-mode: horizontal-tb;
+        }
+
+        /* 6 Craft Book Paper Textures */
+        .paper-theme-white {
+            background-color: #FAFAFA;
+            color: #262626;
+        }
+        .paper-theme-cream {
+            background-color: #F8F4E8;
+            background-image: radial-gradient(#e2dad0 0.5px, transparent 0.5px);
+            background-size: 16px 16px;
+            color: #2D2926;
+        }
+        .paper-theme-kraft {
+            background-color: #E8DAC1;
+            background-image: linear-gradient(0deg, rgba(160, 130, 90, 0.03) 50%, transparent 50%);
+            background-size: 100% 4px;
+            color: #38281A;
+        }
+        .paper-theme-green {
+            background-color: #E2EBE0;
+            background-image: radial-gradient(#c3d4c0 0.5px, transparent 0.5px);
+            background-size: 20px 20px;
+            color: #1C2E1B;
+        }
+        .paper-theme-ink {
+            background-color: #222B32;
+            color: #D3DCDE;
+        }
+        .paper-theme-midnight {
+            background-color: #121315;
+            color: #A0A5AD;
+        }
+
+        /* Highlighting active paragraph during TTS reading */
+        .tts-active-paragraph {
+            background-color: rgba(234, 179, 8, 0.25);
+            border-radius: 6px;
+            box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.4);
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Dock positions transition */
+        .dock-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Collapsed Dock Toolbar Styling for Left/Right */
+        .dock-collapsed-side {
+            width: 3.25rem !important;
+            overflow: hidden !important;
+        }
+
+        /* Book page shadow effect */
+        .book-center-divider {
+            background: linear-gradient(to right, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.05) 100%);
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-900 font-serif select-none antialiased text-slate-800 dark:text-slate-200 overflow-hidden">
+
+    <!-- App Container -->
+    <div id="app" class="h-full w-full flex flex-col relative bg-slate-950">
+
+        <!-- Top Navigation Status Bar -->
+        <header id="top-bar" class="h-14 bg-slate-900/90 backdrop-blur border-b border-slate-800 text-slate-300 px-4 flex items-center justify-between z-30 shrink-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-amber-700/80 flex items-center justify-center text-amber-200 font-bold shadow-md">
+                    <i class="fa-solid fa-book-open text-base"></i>
+                </div>
+                <h1 class="text-lg font-bold tracking-wider text-slate-100 flex items-center gap-2">
+                    AI 小說播播 <span class="text-xs font-normal px-2 py-0.5 rounded bg-amber-900/50 text-amber-300 border border-amber-700/40">v2.8 旗艦典藏版</span>
+                </h1>
+            </div>
+
+            <div class="flex items-center space-x-2 text-sm">
+                <!-- Book Title Display -->
+                <span id="current-book-title" class="hidden md:inline-block max-w-[200px] lg:max-w-[320px] truncate text-slate-400 font-sans italic text-xs bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/50">
+                    尚未載入書籍
+                </span>
+
+                <!-- Quick File Import Button -->
+                <button onclick="triggerFileInput()" class="px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-50 font-sans text-xs flex items-center gap-1.5 transition shadow-sm">
+                    <i class="fa-solid fa-file-arrow-up"></i>
+                    <span>匯入小說</span>
+                </button>
+
+                <!-- Clear / Close Book Button -->
+                <button id="clear-book-btn" onclick="clearBook()" title="清空與關閉目前書籍" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 font-sans text-xs flex items-center gap-1.5 transition border border-slate-700/60">
+                    <i class="fa-solid fa-trash-can text-red-400"></i>
+                    <span class="hidden sm:inline">清空書籍</span>
+                </button>
+
+                <!-- Chapters Drawer Button -->
+                <button onclick="toggleChaptersDrawer()" title="章節目錄與書籤" class="p-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition">
+                    <i class="fa-solid fa-list-ul text-base"></i>
+                </button>
+
+                <!-- Help / Info -->
+                <button onclick="toggleModal('info-modal')" title="使用說明" class="p-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition">
+                    <i class="fa-regular fa-circle-question text-base"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area with Left/Right Dynamic Toolbar Docking -->
+        <div id="workspace" class="flex-1 flex relative overflow-hidden">
+
+            <!-- Dynamic Control Toolbar Container (Left / Right Only) -->
+            <aside id="docked-toolbar" class="bg-slate-900 border-slate-800 text-slate-200 z-20 flex flex-col justify-between p-2 shadow-2xl dock-transition shrink-0 border-r w-64 relative">
+                
+                <!-- Collapse / Expand Toggle Button -->
+                <button id="dock-collapse-btn" onclick="toggleDockCollapse()" class="absolute -right-3 top-3 z-30 w-6 h-6 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center text-xs shadow-md transition transform hover:scale-110" title="縮小/展開功能列">
+                    <i id="dock-collapse-icon" class="fa-solid fa-angles-left"></i>
+                </button>
+
+                <!-- Inner Toolbar Controls -->
+                <div id="toolbar-content" class="w-full h-full flex flex-col justify-between space-y-3 overflow-y-auto p-1">
+                    
+                    <!-- Section 1: Audio Playback Controls (AI 播播) -->
+                    <div class="space-y-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50">
+                        <div class="text-xs font-bold text-amber-400 flex items-center justify-between uppercase tracking-wider">
+                            <span><i class="fa-solid fa-volume-high mr-1"></i> AI 語音播音</span>
+                            <span id="tts-status-tag" class="text-[10px] text-slate-400 font-normal">就緒</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-center space-x-2 py-1">
+                            <button onclick="previousParagraphTTS()" class="p-2 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 transition text-sm" title="上一段">
+                                <i class="fa-solid fa-backward-step"></i>
+                            </button>
+                            <button id="tts-play-btn" onclick="toggleTTSPlay()" class="w-10 h-10 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center transition shadow-lg text-base">
+                                <i class="fa-solid fa-play ml-0.5"></i>
+                            </button>
+                            <button onclick="stopTTS()" class="p-2 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 transition text-sm" title="停止">
+                                <i class="fa-solid fa-square"></i>
+                            </button>
+                            <button onclick="nextParagraphTTS()" class="p-2 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-200 transition text-sm" title="下一段">
+                                <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                        </div>
+
+                        <!-- Voice Options & Speed -->
+                        <div class="space-y-2 text-xs">
+                            <div>
+                                <label class="text-slate-400 block mb-1">語音選擇</label>
+                                <select id="tts-voice-select" onchange="changeVoice()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500">
+                                    <option value="">載入語音庫中...</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-1">
+                                    <span>播放速度</span>
+                                    <span id="speed-val-text" class="text-amber-400 font-mono">1.0x</span>
+                                </div>
+                                <input type="range" id="tts-speed-slider" min="0.5" max="2.5" step="0.1" value="1.0" oninput="updateTTSSpeed(this.value)" class="w-full accent-amber-500 bg-slate-700 rounded h-1.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Reader Layout Options -->
+                    <div class="space-y-2.5 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50 text-xs">
+                        <div class="text-xs font-bold text-slate-300 flex items-center justify-between">
+                            <span><i class="fa-solid fa-sliders mr-1"></i> 排版與畫面</span>
+                        </div>
+
+                        <!-- Simplified / Traditional Chinese Conversion -->
+                        <div>
+                            <span class="text-slate-400 block mb-1">簡繁中文轉換</span>
+                            <div class="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700/60 text-[11px]">
+                                <button id="btn-zh-original" onclick="setChineseMode('original')" class="py-1 rounded text-center transition font-medium">
+                                    原文
+                                </button>
+                                <button id="btn-zh-trad" onclick="setChineseMode('traditional')" class="py-1 rounded text-center transition font-medium">
+                                    轉繁體
+                                </button>
+                                <button id="btn-zh-simp" onclick="setChineseMode('simplified')" class="py-1 rounded text-center transition font-medium">
+                                    轉簡體
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Writing Direction: Horizontal / Vertical -->
+                        <div>
+                            <span class="text-slate-400 block mb-1">文字方向</span>
+                            <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700/60">
+                                <button id="btn-writing-hz" onclick="setWritingMode('horizontal')" class="py-1 rounded text-center transition font-medium">
+                                    <i class="fa-solid fa-align-left mr-1"></i>橫書
+                                </button>
+                                <button id="btn-writing-vt" onclick="setWritingMode('vertical')" class="py-1 rounded text-center transition font-medium">
+                                    <i class="fa-solid fa-align-right mr-1 rotate-90"></i>直書
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Page View Mode: Single / Double -->
+                        <div>
+                            <span class="text-slate-400 block mb-1">頁面模式</span>
+                            <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700/60">
+                                <button id="btn-view-single" onclick="setPageViewMode('single')" class="py-1 rounded text-center transition">
+                                    <i class="fa-regular fa-file mr-1"></i>單頁
+                                </button>
+                                <button id="btn-view-double" onclick="setPageViewMode('double')" class="py-1 rounded text-center transition">
+                                    <i class="fa-solid fa-book-open mr-1"></i>雙頁
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Flip Direction: Left Flip / Right Flip -->
+                        <div>
+                            <span class="text-slate-400 block mb-1">翻頁方向</span>
+                            <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700/60">
+                                <button id="btn-flip-left" onclick="setFlipDirection('left')" class="py-1 rounded text-center transition">
+                                    <i class="fa-solid fa-arrow-left mr-1"></i>左翻
+                                </button>
+                                <button id="btn-flip-right" onclick="setFlipDirection('right')" class="py-1 rounded text-center transition">
+                                    右翻<i class="fa-solid fa-arrow-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Font Selection & Custom Font Upload -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-slate-400">字型設定</span>
+                                <label for="custom-font-input" class="text-amber-400 cursor-pointer hover:underline text-[11px]">
+                                    <i class="fa-solid fa-plus mr-0.5"></i>自訂字型
+                                </label>
+                                <input type="file" id="custom-font-input" accept=".ttf,.otf,.woff,.woff2" class="hidden" onchange="uploadCustomFont(event)">
+                            </div>
+                            <select id="font-family-select" onchange="changeFontFamily(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500">
+                                <option value="serif">宋體 / 明體 (經典文學)</option>
+                                <option value="kai">楷體 (典雅古風)</option>
+                                <option value="sans">黑體 (現代清晰)</option>
+                            </select>
+                        </div>
+
+                        <!-- Font Size Adjustment -->
+                        <div>
+                            <div class="flex justify-between text-slate-400 mb-1">
+                                <span>字型大小</span>
+                                <span id="font-size-text" class="text-amber-400 font-mono">20px</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="adjustFontSize(-2)" class="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">-</button>
+                                <input type="range" id="font-size-slider" min="14" max="36" step="1" value="20" oninput="setFontSize(this.value)" class="w-full accent-amber-500 bg-slate-700 rounded h-1.5">
+                                <button onclick="adjustFontSize(2)" class="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: 6 Book Paper Textures Selection -->
+                    <div class="space-y-2 bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50 text-xs">
+                        <span class="text-slate-300 font-bold block mb-1"><i class="fa-solid fa-palette mr-1"></i> 書本質地樣式 (六款)</span>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <button onclick="setPaperTheme('white')" class="p-2 rounded-lg border border-slate-600 bg-neutral-100 text-neutral-800 text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                純白象牙
+                            </button>
+                            <button onclick="setPaperTheme('cream')" class="p-2 rounded-lg border border-amber-200 bg-[#F8F4E8] text-[#2D2926] text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                溫潤米紙
+                            </button>
+                            <button onclick="setPaperTheme('kraft')" class="p-2 rounded-lg border border-amber-400 bg-[#E8DAC1] text-[#38281A] text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                復古牛皮
+                            </button>
+                            <button onclick="setPaperTheme('green')" class="p-2 rounded-lg border border-emerald-300 bg-[#E2EBE0] text-[#1C2E1B] text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                護眼竹青
+                            </button>
+                            <button onclick="setPaperTheme('ink')" class="p-2 rounded-lg border border-slate-700 bg-[#222B32] text-[#D3DCDE] text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                靜謐墨藍
+                            </button>
+                            <button onclick="setPaperTheme('midnight')" class="p-2 rounded-lg border border-neutral-800 bg-[#121315] text-[#A0A5AD] text-[11px] font-bold text-center hover:ring-2 ring-amber-500 transition shadow-sm">
+                                永夜深灰
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Toolbar Dock Position Control (Left / Right) -->
+                    <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/50 text-xs space-y-1.5">
+                        <span class="text-slate-400 block"><i class="fa-solid fa-window-dock mr-1"></i> 功能列位置</span>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <button onclick="setDockPosition('left')" id="dock-btn-left" class="py-1 bg-slate-900 hover:bg-slate-700 rounded text-center border border-slate-700 transition font-medium">
+                                <i class="fa-solid fa-table-columns mr-1"></i>靠左
+                            </button>
+                            <button onclick="setDockPosition('right')" id="dock-btn-right" class="py-1 bg-slate-900 hover:bg-slate-700 rounded text-center border border-slate-700 transition font-medium">
+                                靠右<i class="fa-solid fa-table-columns ml-1 rotate-180"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Reading Stats & Memory Info -->
+                    <div class="text-[11px] text-slate-400 p-2 border-t border-slate-800 flex justify-between items-center">
+                        <span id="read-memory-tag"><i class="fa-solid fa-floppy-disk text-emerald-400 mr-1"></i>進度已自動記憶</span>
+                        <button onclick="toggleFullscreen()" class="hover:text-amber-400 transition" title="全螢幕閱讀">
+                            <i class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+
+                </div>
+            </aside>
+
+            <!-- Main Reading Canvas Viewport -->
+            <main id="reader-viewport" class="flex-1 h-full relative overflow-hidden flex flex-col justify-between transition-all duration-300">
+                
+                <!-- Welcome Upload Dropzone Overlay -->
+                <div id="upload-overlay" class="absolute inset-0 z-20 bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-slate-200">
+                    <div class="max-w-xl w-full text-center space-y-6 bg-slate-800/80 p-8 rounded-2xl border border-slate-700/60 shadow-2xl">
+                        <div class="w-20 h-20 mx-auto rounded-full bg-amber-900/40 border-2 border-amber-600/50 flex items-center justify-center text-amber-400 text-3xl shadow-inner">
+                            <i class="fa-solid fa-book-bookmark"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-wide text-white mb-2 font-serif">歡迎來到 AI 小說播播</h2>
+                            <p class="text-sm text-slate-400 leading-relaxed font-sans">
+                                請選擇或拖放小說文字檔案，支援 <strong class="text-amber-300">.txt / .md / .epub / .mobi</strong> 格式。<br>
+                                專為繁簡中文文學設計，配備優雅沉穩的書紙質感與 AI 語音導讀。
+                            </p>
+                        </div>
+
+                        <!-- Drop Zone Box -->
+                        <div id="drop-zone" onclick="triggerFileInput()" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" class="border-2 border-dashed border-slate-600 hover:border-amber-500 bg-slate-900/50 hover:bg-slate-900/80 rounded-xl p-8 cursor-pointer transition flex flex-col items-center space-y-3 group">
+                            <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-500 group-hover:text-amber-400 transition group-hover:scale-110 transform duration-200"></i>
+                            <span class="text-sm text-slate-300 font-medium">點擊選擇檔案 或 拖曳至此處</span>
+                            <span class="text-xs text-slate-500">支援 .txt, .md, .epub, .mobi 檔案</span>
+                        </div>
+                        <input type="file" id="file-input" accept=".txt,.md,.epub,.mobi" class="hidden" onchange="handleFileSelect(event)">
+
+                        <div class="pt-2 flex justify-center gap-4 text-xs text-slate-400 font-sans">
+                            <button onclick="loadSampleDemoBook()" class="text-amber-400 hover:underline flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> 載入經典範例書籍 (紅樓夢選段)
+                            </button>
+                        </div>
+
+                        <!-- Credits & Version Footer -->
+                        <div class="pt-3 border-t border-slate-700/50 text-[11px] text-slate-400 flex flex-wrap justify-between items-center gap-2 font-sans">
+                            <span class="text-amber-300 font-medium"><i class="fa-solid fa-feather-pointed mr-1"></i>製作：AI練習曲</span>
+                            <span class="text-slate-300">歡迎分享，請勿商用</span>
+                            <span class="font-mono text-slate-500">Updated: Jul, 21, 2026</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Book Reading Display Container -->
+                <div id="book-container" class="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-4 md:p-8 paper-theme-cream transition-colors duration-300">
+                    
+                    <!-- Hidden Measurement Box for Dynamic Pagination Calculation -->
+                    <div id="measure-container" class="absolute opacity-0 pointer-events-none p-6 md:p-12 overflow-hidden leading-relaxed tracking-wide text-justify font-serif" style="left: -9999px; top: -9999px;"></div>
+
+                    <!-- Paper Spread Wrapper -->
+                    <div id="paper-spread" class="w-full h-full max-w-6xl max-h-full rounded-2xl shadow-2xl relative overflow-hidden flex transition-all duration-300 border border-black/5">
+                        
+                        <!-- Left Page Content Box -->
+                        <div id="page-left" class="flex-1 h-full p-6 md:p-12 overflow-auto relative leading-relaxed tracking-wide text-justify font-serif transition-all duration-200">
+                            <!-- Injected dynamically -->
+                        </div>
+
+                        <!-- Middle Book Spine Divider -->
+                        <div id="book-spine" class="w-8 h-full book-center-divider hidden pointer-events-none z-10"></div>
+
+                        <!-- Right Page Content Box -->
+                        <div id="page-right" class="flex-1 h-full p-6 md:p-12 overflow-auto relative leading-relaxed tracking-wide text-justify font-serif transition-all duration-200 hidden">
+                            <!-- Injected dynamically -->
+                        </div>
+
+                    </div>
+
+                    <!-- Touch / Click Hotspots for Next / Prev Page -->
+                    <button id="hotspot-left" onclick="handleLeftHotspotClick()" title="上一頁" class="absolute left-2 top-1/2 -translate-y-1/2 w-12 h-24 rounded-r-xl bg-black/5 hover:bg-black/15 flex items-center justify-center text-slate-700 dark:text-slate-200 transition opacity-0 hover:opacity-100 z-10">
+                        <i class="fa-solid fa-chevron-left text-xl"></i>
+                    </button>
+                    <button id="hotspot-right" onclick="handleRightHotspotClick()" title="下一頁" class="absolute right-2 top-1/2 -translate-y-1/2 w-12 h-24 rounded-l-xl bg-black/5 hover:bg-black/15 flex items-center justify-center text-slate-700 dark:text-slate-200 transition opacity-0 hover:opacity-100 z-10">
+                        <i class="fa-solid fa-chevron-right text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Bottom Reading Navigation & Progress Footer -->
+                <footer class="h-10 bg-slate-900/95 border-t border-slate-800 px-4 flex items-center justify-between text-xs text-slate-400 z-10 shrink-0">
+                    <div class="flex items-center space-x-3">
+                        <button onclick="prevPage()" class="hover:text-amber-400 font-sans">
+                            <i class="fa-solid fa-chevron-left mr-1"></i>上一頁
+                        </button>
+                        <span id="page-progress-text" class="font-mono text-slate-300">第 1 / 1 頁</span>
+                        <button onclick="nextPage()" class="hover:text-amber-400 font-sans">
+                            下一頁<i class="fa-solid fa-chevron-right ml-1"></i>
+                        </button>
+                    </div>
+
+                    <!-- Reading Progress Slider -->
+                    <div class="hidden sm:flex items-center space-x-3 flex-1 max-w-xs mx-6">
+                        <input type="range" id="reading-progress-bar" min="0" max="100" value="0" oninput="onProgressSliderChange(this.value)" class="w-full accent-amber-500 bg-slate-800 rounded h-1 cursor-pointer">
+                        <span id="progress-percent" class="font-mono w-10 text-right">0%</span>
+                    </div>
+
+                    <div class="flex items-center space-x-3 font-sans">
+                        <span id="word-count-tag" class="hidden md:inline">0 字</span>
+                        <button onclick="addBookmark()" title="加入書籤" class="hover:text-amber-400 transition">
+                            <i class="fa-regular fa-bookmark"></i>
+                        </button>
+                    </div>
+                </footer>
+
+            </main>
+        </div>
+
+        <!-- Chapters & Bookmarks Slide Drawer -->
+        <div id="chapters-drawer" class="fixed inset-y-0 right-0 w-80 bg-slate-900 border-l border-slate-800 text-slate-200 z-40 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col shadow-2xl">
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-list-ul text-amber-500"></i> 目錄與書籤
+                </h3>
+                <button onclick="toggleChaptersDrawer()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Drawer Tabs -->
+            <div class="flex border-b border-slate-800 text-xs">
+                <button id="tab-btn-toc" onclick="switchDrawerTab('toc')" class="flex-1 py-2.5 text-center font-medium border-b-2 border-amber-500 text-amber-400">
+                    章節目錄 (<span id="toc-count">0</span>)
+                </button>
+                <button id="tab-btn-bm" onclick="switchDrawerTab('bm')" class="flex-1 py-2.5 text-center font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+                    我的書籤 (<span id="bm-count">0</span>)
+                </button>
+            </div>
+
+            <!-- Content Area -->
+            <div id="drawer-tab-toc" class="flex-1 overflow-y-auto p-3 space-y-1 text-xs">
+                <div class="text-center text-slate-500 py-8">尚未解析到章節</div>
+            </div>
+
+            <div id="drawer-tab-bm" class="flex-1 overflow-y-auto p-3 space-y-1 text-xs hidden">
+                <div class="text-center text-slate-500 py-8">尚無書籤紀錄</div>
+            </div>
+        </div>
+
+        <!-- Information Modal -->
+        <div id="info-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+            <div class="bg-slate-900 border border-slate-800 text-slate-200 max-w-md w-full rounded-2xl p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <h3 class="font-bold text-lg text-amber-400 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info"></i> 關於 AI 小說播播
+                    </h3>
+                    <button onclick="toggleModal('info-modal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="text-xs space-y-2.5 leading-relaxed text-slate-300 font-sans">
+                    <p><strong>📖 全方位文學閱讀：</strong>支援 TXT、Markdown、EPUB 電子書及 MOBI 提取。內建橫書/直書雙向切換、單頁與雙頁書本對開模式。</p>
+                    <p><strong>🎙️ 智慧 AI 語音播音：</strong>使用瀏覽器 SpeechSynthesis 引擎，可自由挑選系統語音聲線與調整語速，播放時會同步標亮當前段落。</p>
+                    <p><strong>🎨 六款古風典藏質地：</strong>純白象牙、溫潤米紙、復古牛皮、護眼竹青、靜謐墨藍與永夜深灰，配合直書排版宛如手握實體典籍。</p>
+                    <p><strong>💾 離線儲存與進度記憶：</strong>所有設定與閱讀進度皆保存在本機瀏覽器 LocalStorage，隱私安全無虞。</p>
+                </div>
+
+                <!-- Metadata & Version Banner -->
+                <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1 font-sans">
+                    <div class="flex justify-between items-center">
+                        <span class="text-amber-300 font-medium"><i class="fa-solid fa-feather-pointed mr-1"></i>製作：AI練習曲</span>
+                        <span class="font-mono text-slate-500">Updated: Jul, 21, 2026</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span>版本資訊：v2.8 旗艦典藏版</span>
+                        <span class="text-slate-300 italic">歡迎分享，請勿商用</span>
+                    </div>
+                </div>
+
+                <div class="pt-2 text-right">
+                    <button onclick="toggleModal('info-modal')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium">關閉</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Floating Toast Container -->
+        <div id="toast-container" class="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center space-y-2"></div>
+
+    </div>
+
+    <script>
+        /* Reader State Core */
+        const state = {
+            bookTitle: '尚未載入書籍',
+            rawContent: '',
+            originalParagraphs: [], // Source raw text paragraphs before Chinese conversion
+            paragraphs: [],         // Current converted paragraphs
+            chapters: [],           // { title, paragraphIndex }
+            bookmarks: [],          // Array of paragraphIndex
+            currentParagraphIndex: 0,
+            currentPage: 1,
+            totalPages: 1,
+            pages: [],              // Array of calculated page paragraph groups: [{ leftOrMain: [], right: [] }]
+
+            // Preferences
+            chineseMode: 'original',   // 'original', 'traditional', 'simplified'
+            isDockCollapsed: false,     // Collapsed toolbar flag
+            writingMode: 'horizontal',  // 'horizontal' or 'vertical'
+            pageViewMode: 'single',     // 'single' or 'double'
+            flipDirection: 'left',      // 'left' or 'right'
+            paperTheme: 'cream',        // 'white','cream','kraft','green','ink','midnight'
+            dockPosition: 'left',       // 'left', 'right'
+            fontFamily: 'serif',        // 'serif', 'kai', 'sans', or custom uploaded font name
+            fontSize: 20,               // in px
+
+            // TTS State
+            ttsSpeaking: false,
+            ttsPaused: false,
+            ttsCurrentParagraph: 0,
+            ttsSpeed: 1.0,
+            selectedVoiceIndex: -1,
+            voices: [],
+            currentUtterance: null
+        };
+
+        let openccConverterTrad = null;
+        let openccConverterSimp = null;
+
+        /* Toast Notifications */
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = 'bg-amber-600 text-white text-xs px-4 py-2 rounded-full shadow-xl font-sans tracking-wide transition-all duration-300 opacity-0 transform translate-y-2';
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        /* UI Modals & Drawers Toggle */
+        function toggleModal(modalId) {
+            const el = document.getElementById(modalId);
+            if (el) el.classList.toggle('hidden');
+        }
+
+        function triggerFileInput() {
+            document.getElementById('file-input').click();
+        }
+
+        /* Clear Current Loaded Book & Reset State */
+        function clearBook() {
+            if (!state.rawContent && state.paragraphs.length === 0) {
+                showToast('目前尚無載入任何書籍');
+                return;
+            }
+
+            stopTTS();
+
+            state.rawContent = '';
+            state.bookTitle = '尚未載入書籍';
+            state.originalParagraphs = [];
+            state.paragraphs = [];
+            state.chapters = [];
+            state.bookmarks = [];
+            state.currentPage = 1;
+            state.totalPages = 1;
+            state.pages = [];
+            state.currentParagraphIndex = 0;
+
+            document.getElementById('current-book-title').textContent = state.bookTitle;
+            document.getElementById('current-book-title').title = state.bookTitle;
+            document.getElementById('word-count-tag').textContent = '0 字';
+            document.getElementById('toc-count').textContent = '0';
+            document.getElementById('bm-count').textContent = '0';
+
+            renderChaptersList();
+            renderBookmarksList();
+
+            // Clear book content in LocalStorage while keeping user theme & layout options
+            saveStateToLocalStorage();
+
+            // Show upload overlay dropzone
+            document.getElementById('upload-overlay').classList.remove('hidden');
+
+            showToast('已成功清空書籍並返回匯入頁面');
+        }
+
+        function toggleChaptersDrawer() {
+            const drawer = document.getElementById('chapters-drawer');
+            if (drawer) drawer.classList.toggle('translate-x-full');
+        }
+
+        function switchDrawerTab(tab) {
+            const btnToc = document.getElementById('tab-btn-toc');
+            const btnBm = document.getElementById('tab-btn-bm');
+            const tabToc = document.getElementById('drawer-tab-toc');
+            const tabBm = document.getElementById('drawer-tab-bm');
+
+            if (tab === 'toc') {
+                btnToc.className = 'flex-1 py-2.5 text-center font-medium border-b-2 border-amber-500 text-amber-400';
+                btnBm.className = 'flex-1 py-2.5 text-center font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+                tabToc.classList.remove('hidden');
+                tabBm.classList.add('hidden');
+            } else {
+                btnBm.className = 'flex-1 py-2.5 text-center font-medium border-b-2 border-amber-500 text-amber-400';
+                btnToc.className = 'flex-1 py-2.5 text-center font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+                tabBm.classList.remove('hidden');
+                tabToc.classList.add('hidden');
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        /* Chinese Converter Logic */
+        function applyChineseConversion() {
+            if (state.chineseMode === 'original') {
+                state.paragraphs = [...state.originalParagraphs];
+                return;
+            }
+            try {
+                if (typeof OpenCC !== 'undefined') {
+                    if (state.chineseMode === 'traditional') {
+                        if (!openccConverterTrad) openccConverterTrad = OpenCC.Converter({ from: 'cn', to: 'tw' });
+                        state.paragraphs = state.originalParagraphs.map(p => openccConverterTrad(p));
+                    } else if (state.chineseMode === 'simplified') {
+                        if (!openccConverterSimp) openccConverterSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });
+                        state.paragraphs = state.originalParagraphs.map(p => openccConverterSimp(p));
+                    }
+                } else {
+                    state.paragraphs = [...state.originalParagraphs];
+                }
+            } catch (e) {
+                console.warn('OpenCC converter fallback:', e);
+                state.paragraphs = [...state.originalParagraphs];
+            }
+        }
+
+        function setChineseMode(mode) {
+            state.chineseMode = mode;
+            applyChineseConversion();
+            renderChaptersList();
+            recalculatePages();
+            renderBookView();
+            updateControlUI();
+            saveStateToLocalStorage();
+        }
+
+        /* Book Content Loader & Chapter Extractor */
+        function loadNovelText(text, title) {
+            state.rawContent = text;
+            state.bookTitle = title || '未命名小說';
+
+            const rawParas = text.split(/\n\s*\n|\r\n\r\n/);
+            const initialParas = rawParas.map(p => p.trim()).filter(p => p.length > 0);
+
+            // Split long paragraphs (>220 chars) for smoother page breaks
+            const processedParas = [];
+            initialParas.forEach(p => {
+                if (p.length > 220) {
+                    const sentences = p.match(/[^。！？!?]+[。！？!?]?/g) || [p];
+                    let chunk = '';
+                    sentences.forEach(s => {
+                        if ((chunk + s).length > 200 && chunk.length > 0) {
+                            processedParas.push(chunk.trim());
+                            chunk = s;
+                        } else {
+                            chunk += s;
+                        }
+                    });
+                    if (chunk.trim()) processedParas.push(chunk.trim());
+                } else {
+                    processedParas.push(p);
+                }
+            });
+
+            state.originalParagraphs = processedParas.length > 0 ? processedParas : [text];
+
+            applyChineseConversion();
+            extractChapters();
+
+            document.getElementById('current-book-title').textContent = state.bookTitle;
+            document.getElementById('current-book-title').title = state.bookTitle;
+            document.getElementById('word-count-tag').textContent = `${text.length.toLocaleString()} 字`;
+            document.getElementById('upload-overlay').classList.add('hidden');
+
+            state.currentParagraphIndex = 0;
+            renderChaptersList();
+            recalculatePages();
+            renderBookView();
+            saveStateToLocalStorage();
+            showToast(`已成功匯入《${state.bookTitle}》`);
+        }
+
+        function extractChapters() {
+            state.chapters = [];
+            const chapterRegex = /^(第[0-9一二三四五六七八九十百千萬]+[章回節卷折].*|Chapter\s+[0-9]+.*)/i;
+            
+            state.originalParagraphs.forEach((para, idx) => {
+                const line = para.trim();
+                if (line.length < 50 && chapterRegex.test(line)) {
+                    state.chapters.push({
+                        title: line,
+                        paragraphIndex: idx
+                    });
+                }
+            });
+            document.getElementById('toc-count').textContent = state.chapters.length;
+        }
+
+        /* EPUB File Parsing helper */
+        async function parseEpubFile(file) {
+            try {
+                const zip = new JSZip();
+                const contents = await zip.loadAsync(file);
+
+                // Find OPF file path from container.xml
+                let opfPath = '';
+                const containerFile = contents.file('META-INF/container.xml');
+                if (containerFile) {
+                    const containerXml = await containerFile.async('text');
+                    const match = containerXml.match(/full-path="([^"]+)"/);
+                    if (match) opfPath = match[1];
+                }
+
+                let textContent = '';
+                if (opfPath && contents.file(opfPath)) {
+                    const opfText = await contents.file(opfPath).async('text');
+                    const parser = new DOMParser();
+                    const opfDoc = parser.parseFromString(opfText, 'application/xml');
+                    const manifestItems = {};
+                    
+                    opfDoc.querySelectorAll('manifest > item').forEach(item => {
+                        manifestItems[item.getAttribute('id')] = item.getAttribute('href');
+                    });
+
+                    const spineRefs = opfDoc.querySelectorAll('spine > itemref');
+                    const baseDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+
+                    for (const ref of spineRefs) {
+                        const idref = ref.getAttribute('idref');
+                        const href = manifestItems[idref];
+                        if (href) {
+                            const fullHtmlPath = baseDir + href;
+                            const htmlFile = contents.file(fullHtmlPath) || contents.file(href);
+                            if (htmlFile) {
+                                const rawHtml = await htmlFile.async('text');
+                                const doc = parser.parseFromString(rawHtml, 'text/html');
+                                // Remove internal script/style tags
+                                doc.querySelectorAll('script, style').forEach(s => s.remove());
+                                const text = doc.body ? doc.body.textContent : doc.textContent;
+                                textContent += text + '\n\n';
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to extracting all html/xhtml files
+                    for (const filename of Object.keys(contents.files)) {
+                        if (filename.endsWith('.html') || filename.endsWith('.xhtml')) {
+                            const rawHtml = await contents.files[filename].async('text');
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(rawHtml, 'text/html');
+                            doc.querySelectorAll('script, style').forEach(s => s.remove());
+                            textContent += (doc.body ? doc.body.textContent : doc.textContent) + '\n\n';
+                        }
+                    }
+                }
+
+                if (!textContent.trim()) throw new Error('EPUB 解析結果為空');
+                loadNovelText(textContent, file.name.replace(/\.[^/.]+$/, ''));
+            } catch (e) {
+                console.error(e);
+                showToast('EPUB 解析失敗，將嘗試以純文字匯入');
+                const text = await file.text();
+                loadNovelText(text, file.name.replace(/\.[^/.]+$/, ''));
+            }
+        }
+
+        /* PalmDOC LZ77 Decompressor for MOBI files */
+        function decompressPalmDoc(bytes) {
+            const out = [];
+            let i = 0;
+            while (i < bytes.length) {
+                const byte = bytes[i++];
+                if (byte === 0) {
+                    out.push(0);
+                } else if (byte >= 1 && byte <= 8) {
+                    for (let j = 0; j < byte && i < bytes.length; j++) {
+                        out.push(bytes[i++]);
+                    }
+                } else if (byte >= 9 && byte <= 0x7f) {
+                    out.push(byte);
+                } else if (byte >= 0x80 && byte <= 0xbf) {
+                    if (i >= bytes.length) break;
+                    const next = bytes[i++];
+                    const distance = ((byte & 0x3f) << 5) | (next >> 3);
+                    const length = (next & 0x07) + 3;
+                    for (let j = 0; j < length; j++) {
+                        if (out.length >= distance) {
+                            out.push(out[out.length - distance]);
+                        }
+                    }
+                } else if (byte >= 0xc0) {
+                    out.push(32); // Space
+                    out.push(byte ^ 0x80);
+                }
+            }
+            return new Uint8Array(out);
+        }
+
+        /* MOBI Binary File Parsing helper */
+        async function parseMobiFile(file) {
+            try {
+                const buffer = await file.arrayBuffer();
+                const view = new DataView(buffer);
+                const bytes = new Uint8Array(buffer);
+
+                if (bytes.length < 78) throw new Error('檔案格式太小，非有效的 MOBI 格式');
+
+                const numRecords = view.getUint16(76);
+                if (numRecords === 0) throw new Error('無效的 MOBI 紀錄');
+
+                const recordOffsets = [];
+                for (let r = 0; r < numRecords; r++) {
+                    const offset = view.getUint32(78 + r * 8);
+                    recordOffsets.push(offset);
+                }
+
+                const rec0Offset = recordOffsets[0];
+                const compression = view.getUint16(rec0Offset);
+                const textRecordCount = view.getUint16(rec0Offset + 8);
+
+                const fullTextBytes = [];
+                const decoder = new TextDecoder('utf-8');
+
+                for (let r = 1; r <= textRecordCount && r < recordOffsets.length; r++) {
+                    const start = recordOffsets[r];
+                    const end = (r + 1 < recordOffsets.length) ? recordOffsets[r + 1] : bytes.length;
+                    const recBytes = bytes.subarray(start, end);
+
+                    let decompressed;
+                    if (compression === 2) {
+                        decompressed = decompressPalmDoc(recBytes);
+                    } else if (compression === 1) {
+                        decompressed = recBytes;
+                    } else {
+                        throw new Error('此 MOBI 檔使用了進階加密/DRM 或不支援的 Huffman 壓縮');
+                    }
+
+                    for (let b = 0; b < decompressed.length; b++) {
+                        fullTextBytes.push(decompressed[b]);
+                    }
+                }
+
+                const rawHtml = decoder.decode(new Uint8Array(fullTextBytes));
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(rawHtml, 'text/html');
+                doc.querySelectorAll('script, style').forEach(s => s.remove());
+                const textContent = doc.body ? doc.body.textContent : doc.textContent;
+
+                if (!textContent || !textContent.trim()) {
+                    throw new Error('MOBI 解開後未發現文字內容');
+                }
+
+                loadNovelText(textContent, file.name.replace(/\.[^/.]+$/, ''));
+            } catch (err) {
+                console.error('MOBI 解析錯誤:', err);
+                showToast(err.message || 'MOBI 解析失敗，可能含有 DRM 版權保護');
+            }
+        }
+
+        /* File Upload Handlers */
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                processUploadedFile(e.dataTransfer.files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                processUploadedFile(e.target.files[0]);
+            }
+        }
+
+        function processUploadedFile(file) {
+            const name = file.name.toLowerCase();
+            if (name.endsWith('.epub')) {
+                parseEpubFile(file);
+            } else if (name.endsWith('.mobi') || name.endsWith('.azw') || name.endsWith('.prc')) {
+                parseMobiFile(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    loadNovelText(evt.target.result, file.name.replace(/\.[^/.]+$/, ''));
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function uploadCustomFont(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const fontName = 'CustomUploadedFont_' + Date.now();
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const font = new FontFace(fontName, evt.target.result);
+                font.load().then(loadedFont => {
+                    document.fonts.add(loadedFont);
+                    
+                    const select = document.getElementById('font-family-select');
+                    const option = document.createElement('option');
+                    option.value = fontName;
+                    option.textContent = `自訂字型 (${file.name})`;
+                    select.appendChild(option);
+                    select.value = fontName;
+
+                    changeFontFamily(fontName);
+                    showToast('自訂字型載入成功！');
+                }).catch(err => {
+                    showToast('字型檔案載入失敗');
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /* Dynamic Viewport Pagination Recalculation */
+        function recalculatePages() {
+            if (!state.paragraphs || state.paragraphs.length === 0) {
+                state.pages = [];
+                state.totalPages = 1;
+                state.currentPage = 1;
+                return;
+            }
+
+            const pageLeft = document.getElementById('page-left');
+            const measureEl = document.getElementById('measure-container');
+            if (!pageLeft || !measureEl) return;
+
+            const rect = pageLeft.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            if (width <= 0 || height <= 0) return;
+
+            const fontStyle = state.fontFamily === 'kai' ? 'Kaiti TC, DFKai-SB, serif' : (state.fontFamily === 'sans' ? 'Noto Sans TC, sans-serif' : (state.fontFamily === 'serif' ? 'Noto Serif TC, serif' : state.fontFamily));
+            measureEl.style.width = width + 'px';
+            measureEl.style.height = height + 'px';
+            measureEl.style.fontFamily = fontStyle;
+            measureEl.style.fontSize = state.fontSize + 'px';
+
+            const isVertical = state.writingMode === 'vertical';
+            if (isVertical) {
+                measureEl.className = 'absolute opacity-0 pointer-events-none p-6 md:p-12 overflow-hidden leading-relaxed tracking-wide text-justify vertical-text';
+            } else {
+                measureEl.className = 'absolute opacity-0 pointer-events-none p-6 md:p-12 overflow-hidden leading-relaxed tracking-wide text-justify horizontal-text';
+            }
+
+            const layoutPages = [];
+            let currentGroup = [];
+            measureEl.innerHTML = '';
+
+            let i = 0;
+            while (i < state.paragraphs.length) {
+                const paraHtml = `<p class="mb-4 text-justify leading-relaxed tracking-wide" style="font-size: ${state.fontSize}px;">${state.paragraphs[i]}</p>`;
+                measureEl.insertAdjacentHTML('beforeend', paraHtml);
+
+                const isOverflow = isVertical ? 
+                    (measureEl.scrollWidth > measureEl.clientWidth + 2) : 
+                    (measureEl.scrollHeight > measureEl.clientHeight + 2);
+
+                if (isOverflow && currentGroup.length > 0) {
+                    layoutPages.push([...currentGroup]);
+                    currentGroup = [];
+                    measureEl.innerHTML = '';
+                } else {
+                    currentGroup.push(i);
+                    i++;
+                }
+            }
+            if (currentGroup.length > 0) {
+                layoutPages.push(currentGroup);
+            }
+
+            if (state.pageViewMode === 'double') {
+                state.pages = [];
+                for (let k = 0; k < layoutPages.length; k += 2) {
+                    const page1 = layoutPages[k] || [];
+                    const page2 = layoutPages[k + 1] || [];
+                    state.pages.push({ leftOrMain: page1, right: page2 });
+                }
+            } else {
+                state.pages = layoutPages.map(p => ({ leftOrMain: p, right: [] }));
+            }
+
+            state.totalPages = Math.max(1, state.pages.length);
+
+            let targetPageIndex = 0;
+            for (let pIdx = 0; pIdx < state.pages.length; pIdx++) {
+                const pageObj = state.pages[pIdx];
+                if (pageObj.leftOrMain.includes(state.currentParagraphIndex) || pageObj.right.includes(state.currentParagraphIndex)) {
+                    targetPageIndex = pIdx;
+                    break;
+                }
+            }
+            state.currentPage = targetPageIndex + 1;
+        }
+
+        /* Reader Display Controls */
+        function setWritingMode(mode) {
+            state.writingMode = mode;
+            // 直書預設左翻下一頁，橫書預設右翻下一頁
+            if (mode === 'vertical') {
+                state.flipDirection = 'left';
+            } else {
+                state.flipDirection = 'right';
+            }
+            recalculatePages();
+            renderBookView();
+            updateControlUI();
+            saveStateToLocalStorage();
+        }
+
+        function setPageViewMode(mode) {
+            state.pageViewMode = mode;
+            recalculatePages();
+            renderBookView();
+            updateControlUI();
+            saveStateToLocalStorage();
+        }
+
+        function setFlipDirection(dir) {
+            state.flipDirection = dir;
+            updateControlUI();
+            saveStateToLocalStorage();
+        }
+
+        function changeFontFamily(val) {
+            state.fontFamily = val;
+            recalculatePages();
+            renderBookView();
+            saveStateToLocalStorage();
+        }
+
+        function setFontSize(val) {
+            state.fontSize = parseInt(val);
+            document.getElementById('font-size-text').textContent = `${state.fontSize}px`;
+            recalculatePages();
+            renderBookView();
+            saveStateToLocalStorage();
+        }
+
+        function adjustFontSize(delta) {
+            const newSize = Math.max(14, Math.min(36, state.fontSize + delta));
+            document.getElementById('font-size-slider').value = newSize;
+            setFontSize(newSize);
+        }
+
+        function setPaperTheme(theme) {
+            state.paperTheme = theme;
+            const container = document.getElementById('book-container');
+            container.className = `flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-4 md:p-8 paper-theme-${theme} transition-colors duration-300`;
+            saveStateToLocalStorage();
+        }
+
+        /* Toolbar Dock Position & Collapse (Left / Right Only) */
+        function setDockPosition(pos) {
+            state.dockPosition = (pos === 'right') ? 'right' : 'left';
+            applyDockPosition(state.dockPosition);
+            saveStateToLocalStorage();
+        }
+
+        function applyDockPosition(pos) {
+            const workspace = document.getElementById('workspace');
+            const toolbar = document.getElementById('docked-toolbar');
+            const collapseBtn = document.getElementById('dock-collapse-btn');
+            const collapseIcon = document.getElementById('dock-collapse-icon');
+
+            if (pos === 'right') {
+                workspace.className = 'flex-1 flex flex-row-reverse relative overflow-hidden';
+                toolbar.className = 'bg-slate-900 border-slate-800 text-slate-200 z-20 flex flex-col justify-between p-2 shadow-2xl dock-transition shrink-0 border-l w-64 relative';
+                collapseBtn.className = 'absolute -left-3 top-3 z-30 w-6 h-6 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center text-xs shadow-md transition transform hover:scale-110';
+                collapseIcon.className = state.isDockCollapsed ? 'fa-solid fa-angles-left' : 'fa-solid fa-angles-right';
+            } else {
+                workspace.className = 'flex-1 flex flex-row relative overflow-hidden';
+                toolbar.className = 'bg-slate-900 border-slate-800 text-slate-200 z-20 flex flex-col justify-between p-2 shadow-2xl dock-transition shrink-0 border-r w-64 relative';
+                collapseBtn.className = 'absolute -right-3 top-3 z-30 w-6 h-6 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center text-xs shadow-md transition transform hover:scale-110';
+                collapseIcon.className = state.isDockCollapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left';
+            }
+
+            if (state.isDockCollapsed) {
+                toolbar.classList.add('dock-collapsed-side');
+                document.getElementById('toolbar-content').classList.add('hidden');
+            } else {
+                toolbar.classList.remove('dock-collapsed-side');
+                document.getElementById('toolbar-content').classList.remove('hidden');
+            }
+        }
+
+        function toggleDockCollapse() {
+            state.isDockCollapsed = !state.isDockCollapsed;
+            applyDockPosition(state.dockPosition);
+            saveStateToLocalStorage();
+            setTimeout(() => {
+                recalculatePages();
+                renderBookView();
+            }, 300);
+        }
+
+        function updateControlUI() {
+            const btnOriginal = document.getElementById('btn-zh-original');
+            const btnTrad = document.getElementById('btn-zh-trad');
+            const btnSimp = document.getElementById('btn-zh-simp');
+
+            [btnOriginal, btnTrad, btnSimp].forEach(btn => {
+                if (btn) btn.className = 'py-1 rounded text-center transition font-medium text-slate-400';
+            });
+            if (state.chineseMode === 'original' && btnOriginal) btnOriginal.className = 'py-1 rounded text-center transition font-medium bg-amber-600 text-white';
+            if (state.chineseMode === 'traditional' && btnTrad) btnTrad.className = 'py-1 rounded text-center transition font-medium bg-amber-600 text-white';
+            if (state.chineseMode === 'simplified' && btnSimp) btnSimp.className = 'py-1 rounded text-center transition font-medium bg-amber-600 text-white';
+
+            const btnHz = document.getElementById('btn-writing-hz');
+            const btnVt = document.getElementById('btn-writing-vt');
+            if (btnHz) btnHz.className = state.writingMode === 'horizontal' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+            if (btnVt) btnVt.className = state.writingMode === 'vertical' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+
+            const btnSingle = document.getElementById('btn-view-single');
+            const btnDouble = document.getElementById('btn-view-double');
+            if (btnSingle) btnSingle.className = state.pageViewMode === 'single' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+            if (btnDouble) btnDouble.className = state.pageViewMode === 'double' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+
+            const btnFlipLeft = document.getElementById('btn-flip-left');
+            const btnFlipRight = document.getElementById('btn-flip-right');
+            if (btnFlipLeft) btnFlipLeft.className = state.flipDirection === 'left' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+            if (btnFlipRight) btnFlipRight.className = state.flipDirection === 'right' ? 'py-1 rounded text-center transition font-medium bg-amber-600 text-white' : 'py-1 rounded text-center transition font-medium text-slate-400';
+
+            const dockBtnLeft = document.getElementById('dock-btn-left');
+            const dockBtnRight = document.getElementById('dock-btn-right');
+            if (dockBtnLeft) dockBtnLeft.className = state.dockPosition === 'left' ? 'py-1 bg-amber-600 text-white rounded text-center border border-amber-500 transition font-medium' : 'py-1 bg-slate-900 text-slate-400 rounded text-center border border-slate-700 transition font-medium';
+            if (dockBtnRight) dockBtnRight.className = state.dockPosition === 'right' ? 'py-1 bg-amber-600 text-white rounded text-center border border-amber-500 transition font-medium' : 'py-1 bg-slate-900 text-slate-400 rounded text-center border border-slate-700 transition font-medium';
+
+            // 更新畫面左右熱區的提示說明
+            const hotspotLeft = document.getElementById('hotspot-left');
+            const hotspotRight = document.getElementById('hotspot-right');
+            if (hotspotLeft && hotspotRight) {
+                if (state.flipDirection === 'left') {
+                    hotspotLeft.title = '下一頁 (左翻)';
+                    hotspotRight.title = '上一頁 (右翻)';
+                } else {
+                    hotspotLeft.title = '上一頁';
+                    hotspotRight.title = '下一頁';
+                }
+            }
+        }
+
+        /* Hotspot Flip Actions based on Flip Direction */
+        function handleLeftHotspotClick() {
+            if (state.flipDirection === 'left') {
+                nextPage();
+            } else {
+                prevPage();
+            }
+        }
+
+        function handleRightHotspotClick() {
+            if (state.flipDirection === 'left') {
+                prevPage();
+            } else {
+                nextPage();
+            }
+        }
+
+        /* Render HTML Paragraph List */
+        function renderParagraphList(paraIndices) {
+            if (!paraIndices || paraIndices.length === 0) return '';
+            let html = '';
+            paraIndices.forEach(i => {
+                if (i < state.paragraphs.length) {
+                    const activeClass = (i === state.ttsCurrentParagraph && state.ttsSpeaking) ? 'tts-active-paragraph p-1' : '';
+                    html += `<p id="para-${i}" class="mb-4 text-justify leading-relaxed tracking-wide ${activeClass}" style="font-size: ${state.fontSize}px;">${state.paragraphs[i]}</p>`;
+                }
+            });
+            return html;
+        }
+
+        /* Render Main Book Pages */
+        function renderBookView() {
+            if (state.paragraphs.length === 0) return;
+
+            const pageLeft = document.getElementById('page-left');
+            pageLeft.style.fontFamily = state.fontFamily === 'kai' ? 'Kaiti TC, DFKai-SB, serif' : (state.fontFamily === 'sans' ? 'Noto Sans TC, sans-serif' : (state.fontFamily === 'serif' ? 'Noto Serif TC, serif' : state.fontFamily));
+            
+            const pageRight = document.getElementById('page-right');
+            pageRight.style.fontFamily = pageLeft.style.fontFamily;
+
+            const bookSpine = document.getElementById('book-spine');
+
+            if (state.writingMode === 'vertical') {
+                pageLeft.className = 'flex-1 h-full p-6 md:p-12 overflow-hidden relative leading-relaxed tracking-wide text-justify vertical-text transition-all duration-200';
+                pageRight.className = 'flex-1 h-full p-6 md:p-12 overflow-hidden relative leading-relaxed tracking-wide text-justify vertical-text transition-all duration-200';
+            } else {
+                pageLeft.className = 'flex-1 h-full p-6 md:p-12 overflow-hidden relative leading-relaxed tracking-wide text-justify horizontal-text transition-all duration-200';
+                pageRight.className = 'flex-1 h-full p-6 md:p-12 overflow-hidden relative leading-relaxed tracking-wide text-justify horizontal-text transition-all duration-200';
+            }
+
+            if (state.pageViewMode === 'double') {
+                pageRight.classList.remove('hidden');
+                bookSpine.classList.remove('hidden');
+            } else {
+                pageRight.classList.add('hidden');
+                bookSpine.classList.add('hidden');
+            }
+
+            if (!state.pages || state.pages.length === 0) {
+                recalculatePages();
+            }
+
+            state.currentPage = Math.max(1, Math.min(state.totalPages, state.currentPage));
+            const currentPageData = state.pages[state.currentPage - 1] || { leftOrMain: [], right: [] };
+
+            if (state.pageViewMode === 'double') {
+                if (state.writingMode === 'vertical') {
+                    // Right page -> Left page progression for Vertical Traditional book
+                    pageRight.innerHTML = renderParagraphList(currentPageData.leftOrMain);
+                    pageLeft.innerHTML = renderParagraphList(currentPageData.right);
+                } else {
+                    // Left page -> Right page progression for Horizontal book
+                    pageLeft.innerHTML = renderParagraphList(currentPageData.leftOrMain);
+                    pageRight.innerHTML = renderParagraphList(currentPageData.right);
+                }
+            } else {
+                pageLeft.innerHTML = renderParagraphList(currentPageData.leftOrMain);
+            }
+
+            const percent = Math.round((state.currentPage / state.totalPages) * 100) || 0;
+            document.getElementById('page-progress-text').textContent = `第 ${state.currentPage} / ${state.totalPages} 頁`;
+            document.getElementById('progress-percent').textContent = `${percent}%`;
+            document.getElementById('reading-progress-bar').value = percent;
+
+            saveStateToLocalStorage();
+        }
+
+        function nextPage() {
+            if (state.currentPage < state.totalPages) {
+                state.currentPage++;
+                const currentPageData = state.pages[state.currentPage - 1];
+                if (currentPageData && currentPageData.leftOrMain.length > 0) {
+                    state.currentParagraphIndex = currentPageData.leftOrMain[0];
+                }
+                renderBookView();
+            }
+        }
+
+        function prevPage() {
+            if (state.currentPage > 1) {
+                state.currentPage--;
+                const currentPageData = state.pages[state.currentPage - 1];
+                if (currentPageData && currentPageData.leftOrMain.length > 0) {
+                    state.currentParagraphIndex = currentPageData.leftOrMain[0];
+                }
+                renderBookView();
+            }
+        }
+
+        function onProgressSliderChange(val) {
+            const targetPage = Math.max(1, Math.round((val / 100) * state.totalPages));
+            state.currentPage = targetPage;
+            const currentPageData = state.pages[state.currentPage - 1];
+            if (currentPageData && currentPageData.leftOrMain.length > 0) {
+                state.currentParagraphIndex = currentPageData.leftOrMain[0];
+            }
+            renderBookView();
+        }
+
+        function jumpToParagraph(index) {
+            state.currentParagraphIndex = index;
+            if (state.pages) {
+                for (let pIdx = 0; pIdx < state.pages.length; pIdx++) {
+                    const pageObj = state.pages[pIdx];
+                    if (pageObj.leftOrMain.includes(index) || pageObj.right.includes(index)) {
+                        state.currentPage = pIdx + 1;
+                        break;
+                    }
+                }
+            }
+            renderBookView();
+        }
+
+        /* Chapters & Bookmarks Drawer */
+        function renderChaptersList() {
+            const container = document.getElementById('drawer-tab-toc');
+            if (!container) return;
+
+            if (!state.chapters || state.chapters.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-500 py-8">尚未解析到章節</div>';
+                return;
+            }
+
+            let html = '';
+            state.chapters.forEach(ch => {
+                html += `
+                    <button onclick="jumpToParagraph(${ch.paragraphIndex}); toggleChaptersDrawer();" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800 text-slate-300 hover:text-amber-400 transition truncate block">
+                        <i class="fa-solid fa-bookmark text-amber-600 mr-2"></i>${ch.title}
+                    </button>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function addBookmark() {
+            if (state.paragraphs.length === 0) return;
+            if (!state.bookmarks.includes(state.currentParagraphIndex)) {
+                state.bookmarks.push(state.currentParagraphIndex);
+                state.bookmarks.sort((a, b) => a - b);
+                renderBookmarksList();
+                saveStateToLocalStorage();
+                showToast('已加入書籤！');
+            } else {
+                showToast('此處已在書籤列表中');
+            }
+        }
+
+        function removeBookmark(index) {
+            state.bookmarks = state.bookmarks.filter(b => b !== index);
+            renderBookmarksList();
+            saveStateToLocalStorage();
+            showToast('已移除書籤');
+        }
+
+        function renderBookmarksList() {
+            const container = document.getElementById('drawer-tab-bm');
+            const countEl = document.getElementById('bm-count');
+            if (!container) return;
+
+            countEl.textContent = state.bookmarks.length;
+
+            if (!state.bookmarks || state.bookmarks.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-500 py-8">尚無書籤紀錄</div>';
+                return;
+            }
+
+            let html = '';
+            state.bookmarks.forEach(paraIdx => {
+                const snippet = (state.paragraphs[paraIdx] || '').substring(0, 30) + '...';
+                html += `
+                    <div class="flex items-center justify-between px-3 py-2 rounded hover:bg-slate-800 text-slate-300 group">
+                        <button onclick="jumpToParagraph(${paraIdx}); toggleChaptersDrawer();" class="flex-1 text-left truncate hover:text-amber-400">
+                            <i class="fa-regular fa-bookmark text-amber-500 mr-2"></i>${snippet}
+                        </button>
+                        <button onclick="removeBookmark(${paraIdx})" class="text-slate-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        /* Web Speech Synthesis (TTS AI Voice Player) */
+        function initSpeechSynthesis() {
+            if (!('speechSynthesis' in window)) {
+                document.getElementById('tts-status-tag').textContent = '不支援語音';
+                return;
+            }
+
+            function populateVoices() {
+                const voices = window.speechSynthesis.getVoices();
+                if (!voices || voices.length === 0) return;
+                state.voices = voices;
+
+                const select = document.getElementById('tts-voice-select');
+                if (!select) return;
+                select.innerHTML = '';
+
+                let zhVoices = voices.filter(v => v.lang.includes('zh') || v.lang.includes('cmn') || v.lang.includes('yue'));
+                if (zhVoices.length === 0) zhVoices = voices;
+
+                zhVoices.forEach((voice) => {
+                    const index = voices.indexOf(voice);
+                    const option = document.createElement('option');
+                    option.value = index;
+                    let genderTag = '';
+                    const nameLower = voice.name.toLowerCase();
+                    if (nameLower.includes('male') || nameLower.includes('男') || nameLower.includes('yunxi') || nameLower.includes('yunjian') || nameLower.includes('kangkang')) {
+                        genderTag = ' (男音)';
+                    } else if (nameLower.includes('female') || nameLower.includes('女') || nameLower.includes('xiaoxiao') || nameLower.includes('hsiao') || nameLower.includes('yaoyao')) {
+                        genderTag = ' (女音)';
+                    }
+                    option.textContent = `${voice.name}${genderTag}`;
+                    select.appendChild(option);
+                });
+
+                if (zhVoices.length > 0 && state.selectedVoiceIndex === -1) {
+                    state.selectedVoiceIndex = voices.indexOf(zhVoices[0]);
+                    select.value = state.selectedVoiceIndex;
+                }
+            }
+
+            populateVoices();
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = populateVoices;
+            }
+        }
+
+        function changeVoice() {
+            const select = document.getElementById('tts-voice-select');
+            state.selectedVoiceIndex = parseInt(select.value);
+            if (state.ttsSpeaking) {
+                speakCurrentParagraph();
+            }
+        }
+
+        function updateTTSSpeed(val) {
+            state.ttsSpeed = parseFloat(val);
+            document.getElementById('speed-val-text').textContent = `${state.ttsSpeed.toFixed(1)}x`;
+            if (state.ttsSpeaking) {
+                speakCurrentParagraph();
+            }
+            saveStateToLocalStorage();
+        }
+
+        function toggleTTSPlay() {
+            if (state.paragraphs.length === 0) return;
+
+            const btn = document.getElementById('tts-play-btn');
+            const status = document.getElementById('tts-status-tag');
+
+            if (!state.ttsSpeaking) {
+                state.ttsSpeaking = true;
+                state.ttsCurrentParagraph = state.currentParagraphIndex;
+                btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                status.textContent = '播音中';
+                speakCurrentParagraph();
+            } else if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+                btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                status.textContent = '播音中';
+            } else {
+                window.speechSynthesis.pause();
+                btn.innerHTML = '<i class="fa-solid fa-play ml-0.5"></i>';
+                status.textContent = '已暫停';
+            }
+        }
+
+        function stopTTS() {
+            state.ttsSpeaking = false;
+            state.ttsPaused = false;
+            window.speechSynthesis.cancel();
+            document.getElementById('tts-play-btn').innerHTML = '<i class="fa-solid fa-play ml-0.5"></i>';
+            document.getElementById('tts-status-tag').textContent = '就緒';
+            renderBookView();
+        }
+
+        function previousParagraphTTS() {
+            if (state.ttsCurrentParagraph > 0) {
+                state.ttsCurrentParagraph--;
+                speakCurrentParagraph();
+            }
+        }
+
+        function nextParagraphTTS() {
+            if (state.ttsCurrentParagraph < state.paragraphs.length - 1) {
+                state.ttsCurrentParagraph++;
+                speakCurrentParagraph();
+            }
+        }
+
+        function speakCurrentParagraph() {
+            if (!state.ttsSpeaking || state.ttsCurrentParagraph >= state.paragraphs.length) {
+                stopTTS();
+                return;
+            }
+
+            jumpToParagraph(state.ttsCurrentParagraph);
+
+            const textToSpeak = state.paragraphs[state.ttsCurrentParagraph];
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            state.currentUtterance = utterance;
+
+            if (state.voices[state.selectedVoiceIndex]) {
+                utterance.voice = state.voices[state.selectedVoiceIndex];
+            }
+            utterance.rate = state.ttsSpeed;
+
+            utterance.onend = function() {
+                if (state.ttsSpeaking) {
+                    state.ttsCurrentParagraph++;
+                    speakCurrentParagraph();
+                }
+            };
+
+            utterance.onerror = function(event) {
+                if (event.error === 'interrupted' || event.error === 'canceled') return;
+                if (state.ttsSpeaking) {
+                    state.ttsCurrentParagraph++;
+                    speakCurrentParagraph();
+                }
+            };
+
+            setTimeout(() => {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utterance);
+            }, 50);
+        }
+
+        /* Demo Sample Book Loader */
+        function loadSampleDemoBook() {
+            const demoText = `第一回 甄士隱夢幻識通靈 賈雨村風塵懷閨秀
+
+此開卷第一回也。作者自雲：因曾歷過一段幻夢之後，故將真事隱去，而借"通靈"之說，撰此《石頭記》一書者也。故曰"甄士隱"雲雲。
+
+至若離合悲歡，興衰際遇，則又追琢真情，不即不離，要不出乎世情之外。
+
+話說紅塵中有了這點靈性，方入能界。那僧道二人，攜了這塊頑石，同往人間投胎。
+
+不知過了多少劫，忽有一道人，名曰空空道人，自大荒山無稽崖經過，見大石上字跡分明，編述歷歷。
+
+空空道人乃從頭至尾抄錄回來，問世傳奇。因空見色，由色生情，傳情入色，自色悟空，遂改名情僧，改《石頭記》為《情僧錄》。
+
+東魯孔梅溪則題曰《風月寶鑑》。後因曹雪芹於悼紅軒中披閱十載，增刪五次，纂成目錄，分出章回，則題曰《金陵十二釵》。
+
+第二回 賈夫人仙逝揚州城 冷子興演說榮國府
+
+詩雲：
+一局輸贏料不真，香銷茶盡尚稱臣。
+自知性僻難秦晉，強半心懷怨楚秦。
+
+且說賈雨村因生得腰圓背厚，面闊口方，劍眉星目，直鼻權骨，正是有志之士。
+
+自從到京參謁，選入都中，今復被擢為揚州太守。適值巡鹽御史林如海之妻賈氏夫人仙逝，留有一女名喚黛玉。
+
+林如海延請雨村為黛玉館賓。雨村因有冷子興相遇於郊外酒肆，二人對飲，話及榮國府之盛衰。
+
+冷子興道："如今寧榮二府，皆非昔日之比。內裡漸次耗散，外頭仍是鋪張。算來近幾年竟是不如前了。"
+
+雨村聽罷，歎道："天地生人，除大仁大惡，餘者皆無大異。若大仁者生於公侯富貴之家，則為治世之能臣；若生於貧寒鄙陋之所，亦為亂世之英雄。"
+
+這正是：滿紙荒唐言，一把辛酸淚！都雲作者痴，誰解其中味？`;
+
+            loadNovelText(demoText, '紅樓夢 (精選測試章節)');
+        }
+
+        /* LocalStorage Memory Persistence */
+        function saveStateToLocalStorage() {
+            try {
+                const dataToSave = {
+                    bookTitle: state.bookTitle,
+                    rawContent: state.rawContent,
+                    currentParagraphIndex: state.currentParagraphIndex,
+                    bookmarks: state.bookmarks,
+                    chineseMode: state.chineseMode,
+                    writingMode: state.writingMode,
+                    pageViewMode: state.pageViewMode,
+                    flipDirection: state.flipDirection,
+                    paperTheme: state.paperTheme,
+                    dockPosition: state.dockPosition,
+                    fontFamily: state.fontFamily,
+                    fontSize: state.fontSize,
+                    ttsSpeed: state.ttsSpeed
+                };
+                localStorage.setItem('ai_novel_player_state', JSON.stringify(dataToSave));
+            } catch (e) {
+                console.warn('LocalStorage save failed:', e);
+            }
+        }
+
+        function loadStateFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem('ai_novel_player_state');
+                if (!saved) return;
+                const parsed = JSON.parse(saved);
+
+                if (parsed.chineseMode) state.chineseMode = parsed.chineseMode;
+                if (parsed.writingMode) state.writingMode = parsed.writingMode;
+                if (parsed.pageViewMode) state.pageViewMode = parsed.pageViewMode;
+                if (parsed.flipDirection) state.flipDirection = parsed.flipDirection;
+                if (parsed.paperTheme) state.paperTheme = parsed.paperTheme;
+                if (parsed.dockPosition) {
+                    state.dockPosition = (parsed.dockPosition === 'right') ? 'right' : 'left';
+                }
+                if (parsed.fontFamily) state.fontFamily = parsed.fontFamily;
+                if (parsed.fontSize) {
+                    state.fontSize = parsed.fontSize;
+                    document.getElementById('font-size-slider').value = state.fontSize;
+                    document.getElementById('font-size-text').textContent = `${state.fontSize}px`;
+                }
+                if (parsed.ttsSpeed) {
+                    state.ttsSpeed = parsed.ttsSpeed;
+                    document.getElementById('tts-speed-slider').value = state.ttsSpeed;
+                    document.getElementById('speed-val-text').textContent = `${state.ttsSpeed.toFixed(1)}x`;
+                }
+
+                setPaperTheme(state.paperTheme);
+                applyDockPosition(state.dockPosition);
+                updateControlUI();
+
+                if (parsed.rawContent && parsed.rawContent.trim().length > 0) {
+                    loadNovelText(parsed.rawContent, parsed.bookTitle || '已記憶的小說');
+                    if (parsed.currentParagraphIndex) {
+                        state.currentParagraphIndex = parsed.currentParagraphIndex;
+                    }
+                    if (parsed.bookmarks) {
+                        state.bookmarks = parsed.bookmarks;
+                        renderBookmarksList();
+                    }
+                    recalculatePages();
+                    renderBookView();
+                }
+            } catch (e) {
+                console.warn('LocalStorage load failed:', e);
+            }
+        }
+
+        /* Keyboard Hotkeys */
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                if (state.flipDirection === 'left') {
+                    prevPage();
+                } else {
+                    nextPage();
+                }
+            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                if (state.flipDirection === 'left') {
+                    nextPage();
+                } else {
+                    prevPage();
+                }
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                toggleTTSPlay();
+            }
+        });
+
+        /* Dynamic Window Resize Handler */
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (state.paragraphs.length > 0) {
+                    recalculatePages();
+                    renderBookView();
+                }
+            }, 150);
+        });
+
+        /* Application Initialization */
+        window.onload = function() {
+            initSpeechSynthesis();
+            loadStateFromLocalStorage();
+        };
+    </script>
+</body>
+</html>
