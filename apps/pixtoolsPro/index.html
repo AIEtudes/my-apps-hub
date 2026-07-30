@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixTools Pro - 全功能圖片轉換與微編修神器</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip for batch downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(51, 65, 85, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease-in-out;
+        }
+        .glass-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #6366f1;
+        }
+        /* Canvas preview background for transparency */
+        .checkerboard-bg {
+            background-color: #1e293b;
+            background-image: linear-gradient(45deg, #334155 25%, transparent 25%), 
+                              linear-gradient(-45deg, #334155 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #334155 75%), 
+                              linear-gradient(-45deg, transparent 75%, #334155 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between custom-scrollbar selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-700/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-wand-magic-sparkles text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-indigo-300">
+                        PixTools Pro
+                    </h1>
+                    <p class="text-xs text-slate-400">圖像轉換與處理全能工作站</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3 text-xs">
+                <span class="px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-medium">
+                    <i class="fa-solid fa-bolt mr-1"></i> 純前端安全處理
+                </span>
+                <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium hidden sm:inline-block">
+                    v1.2.0
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-20 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- Main Content Layout -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-grow">
+        
+        <!-- Tab Navigation Buttons -->
+        <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-700/60 pb-3">
+            <button onclick="switchTab('tab-convert')" id="btn-tab-convert" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+                <i class="fa-solid fa-repeat"></i>
+                <span>1. 格式與尺寸轉換</span>
+            </button>
+            <button onclick="switchTab('tab-filesize')" id="btn-tab-filesize" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 bg-slate-800 text-slate-300 hover:bg-slate-700">
+                <i class="fa-solid fa-compress"></i>
+                <span>2. 檔案大小壓縮 (KB/MB)</span>
+            </button>
+            <button onclick="switchTab('tab-edit')" id="btn-tab-edit" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 bg-slate-800 text-slate-300 hover:bg-slate-700">
+                <i class="fa-solid fa-sliders"></i>
+                <span>3. 濾鏡與浮水印</span>
+            </button>
+            <button onclick="switchTab('tab-batch')" id="btn-tab-batch" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 bg-slate-800 text-slate-300 hover:bg-slate-700">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>4. 批次多圖轉檔</span>
+            </button>
+            <button onclick="switchTab('tab-palette')" id="btn-tab-palette" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 bg-slate-800 text-slate-300 hover:bg-slate-700">
+                <i class="fa-solid fa-palette"></i>
+                <span>5. 色彩提取與 Base64</span>
+            </button>
+        </div>
+
+        <!-- Shared Image Upload Dropzone -->
+        <div id="drop-zone" class="mb-6 p-8 border-2 border-dashed border-indigo-500/30 hover:border-indigo-500 bg-slate-800/40 hover:bg-slate-800/70 rounded-2xl cursor-pointer transition-all duration-300 text-center relative overflow-hidden group">
+            <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
+            <div class="flex flex-col items-center justify-center space-y-3 pointer-events-none">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-base font-semibold text-slate-200">拖曳圖片到此處，或 <span class="text-indigo-400 underline decoration-indigo-400/50">點擊選擇檔案</span></p>
+                    <p class="text-xs text-slate-400 mt-1">支援 PNG, JPG, WEBP, GIF, BMP, SVG, HEIC 等各種格式</p>
+                </div>
+                <div class="flex flex-wrap justify-center gap-2 pt-1 text-xs text-slate-500">
+                    <span class="px-2 py-0.5 rounded bg-slate-700/50 border border-slate-600/30">桌面圖示 (.ico)</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-700/50 border border-slate-600/30">尺寸自訂</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-700/50 border border-slate-600/30">精確 KB 限制</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-700/50 border border-slate-600/30">批次打包</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 1: Format & Resize Converter -->
+        <div id="tab-convert" class="tab-content grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left Controls Panel -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-file-export text-indigo-400"></i>
+                        <span>目標格式設定</span>
+                    </h3>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">選擇輸出格式</label>
+                        <select id="convert-format" onchange="handleFormatChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <option value="image/png">PNG (.png) - 無損透明</option>
+                            <option value="image/jpeg">JPEG (.jpg / .jpeg) - 高相容</option>
+                            <option value="image/webp">WEBP (.webp) - 新一代高壓縮</option>
+                            <option value="image/x-icon">ICO (.ico) - Windows 桌面圖示</option>
+                            <option value="image/bmp">BMP (.bmp) - 未壓縮點陣圖</option>
+                        </select>
+                    </div>
+
+                    <!-- Quality Slider (JPEG/WEBP) -->
+                    <div id="quality-container" class="space-y-1">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">圖片畫質 (Quality)</label>
+                            <span id="quality-val" class="text-indigo-400 font-bold">90%</span>
+                        </div>
+                        <input type="range" id="quality-range" min="1" max="100" value="90" oninput="updateQualityVal(this.value)" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+
+                    <!-- ICO Sizes Preset Selector (if ICO chosen) -->
+                    <div id="ico-options" class="hidden space-y-2 p-3 bg-slate-900/60 rounded-xl border border-indigo-500/20">
+                        <label class="block text-xs font-semibold text-indigo-300">Windows Icon (.ico) 尺寸包含</label>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="16" checked> 16x16</label>
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="32" checked> 32x32</label>
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="48" checked> 48x48</label>
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="64" checked> 64x64</label>
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="128" checked> 128x128</label>
+                            <label class="flex items-center space-x-1.5"><input type="checkbox" class="ico-size-chk rounded accent-indigo-500" value="256" checked> 256x256</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-up-right-and-down-left-from-center text-purple-400"></i>
+                        <span>調整尺寸大小</span>
+                    </h3>
+
+                    <!-- Resize Mode Selector -->
+                    <div class="grid grid-cols-2 gap-2 bg-slate-900/80 p-1 rounded-xl">
+                        <button type="button" onclick="setResizeMode('pixel')" id="mode-pixel-btn" class="py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition-all">像素 (Pixels)</button>
+                        <button type="button" onclick="setResizeMode('percent')" id="mode-percent-btn" class="py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">百分比 (%)</button>
+                    </div>
+
+                    <!-- Pixel Mode Inputs -->
+                    <div id="resize-pixel-inputs" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">寬度 (Width px)</label>
+                                <input type="number" id="resize-width" min="1" placeholder="寬度" oninput="onWidthChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">高度 (Height px)</label>
+                                <input type="number" id="resize-height" min="1" placeholder="高度" oninput="onHeightChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="keep-aspect" checked class="rounded accent-indigo-500">
+                            <span>保持等比例 (Maintain Aspect Ratio)</span>
+                        </label>
+                    </div>
+
+                    <!-- Percent Mode Inputs -->
+                    <div id="resize-percent-inputs" class="hidden space-y-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-300">縮放比例</span>
+                            <span id="percent-val" class="text-purple-400 font-bold">100%</span>
+                        </div>
+                        <input type="range" id="percent-range" min="10" max="300" value="100" oninput="onPercentChange(this.value)" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+                    </div>
+
+                    <!-- Common Dimension Presets -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">快速預設尺寸</label>
+                        <div class="flex flex-wrap gap-1.5 text-xs">
+                            <button onclick="applyPresetSize(512, 512)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">512x512</button>
+                            <button onclick="applyPresetSize(256, 256)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">256x256 (圖示)</button>
+                            <button onclick="applyPresetSize(1920, 1080)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">1080p (16:9)</button>
+                            <button onclick="applyPresetSize(1080, 1080)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">IG 正方形</button>
+                            <button onclick="applyPresetSize(1200, 630)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">FB 封面</button>
+                        </div>
+                    </div>
+
+                    <button onclick="processAndConvert()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-play"></i>
+                        <span>開始轉換並產生圖片</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Preview Panel -->
+            <div class="lg:col-span-7 flex flex-col space-y-4">
+                <div class="glass-panel p-5 rounded-2xl flex-grow flex flex-col min-h-[420px]">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700/50">
+                        <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+                            <i class="fa-solid fa-image text-emerald-400"></i>
+                            <span>即時預覽與資訊</span>
+                        </h3>
+                        <span id="img-info-badge" class="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1 rounded-full">尚未載入圖片</span>
+                    </div>
+
+                    <!-- Canvas/Preview Box -->
+                    <div class="flex-grow checkerboard-bg rounded-xl flex items-center justify-center p-4 min-h-[280px] overflow-hidden relative group">
+                        <canvas id="main-canvas" class="max-w-full max-h-[380px] object-contain rounded shadow-lg hidden"></canvas>
+                        <div id="empty-state" class="text-center text-slate-500 space-y-2">
+                            <i class="fa-regular fa-image text-4xl text-slate-600"></i>
+                            <p class="text-sm">請先上傳圖片以進行處理</p>
+                        </div>
+                    </div>
+
+                    <!-- Output Download Action Box -->
+                    <div class="mt-4 pt-3 border-t border-slate-700/50 flex flex-wrap items-center justify-between gap-3">
+                        <div class="text-xs text-slate-400">
+                            預估輸出尺寸: <span id="out-dim-info" class="text-slate-200 font-semibold">-</span> | 
+                            格式: <span id="out-fmt-info" class="text-slate-200 font-semibold">-</span>
+                        </div>
+                        <button id="download-btn" disabled onclick="downloadResult()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center space-x-2">
+                            <i class="fa-solid fa-download"></i>
+                            <span>下載轉換後圖片</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Target File Size Control -->
+        <div id="tab-filesize" class="tab-content hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-5 space-y-6">
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-weight-scale text-amber-400"></i>
+                        <span>指定目標檔案大小 (Target Size)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">系統將透過智慧反覆運算，調校畫質與尺寸以將檔案壓制在目標 KB 數以下。</p>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">目標最大檔案大小</label>
+                        <div class="flex space-x-2">
+                            <input type="number" id="target-size-input" value="200" min="5" max="50000" class="flex-grow bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <select id="target-size-unit" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                                <option value="KB">KB</option>
+                                <option value="MB">MB</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Quick Size Presets -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">常用限制預設</label>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <button onclick="setTargetSize(100, 'KB')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">100 KB (頭像/表單)</button>
+                            <button onclick="setTargetSize(500, 'KB')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">500 KB (網路圖)</button>
+                            <button onclick="setTargetSize(1, 'MB')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">1 MB</button>
+                            <button onclick="setTargetSize(2, 'MB')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300">2 MB (上傳上限)</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">指定壓縮格式</label>
+                        <select id="filesize-format" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none">
+                            <option value="image/jpeg">JPEG (.jpg) - 最佳壓縮效率</option>
+                            <option value="image/webp">WEBP (.webp) - 新式極緻高壓</option>
+                        </select>
+                    </div>
+
+                    <button onclick="compressToTargetSize()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>開始智慧壓縮</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Size Compress Result Box -->
+            <div class="lg:col-span-7">
+                <div class="glass-panel p-5 rounded-2xl h-full flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-200 text-base mb-4 border-b border-slate-700/50 pb-2">壓縮前後數據比較</h3>
+                        <div class="grid grid-cols-2 gap-4 text-center mb-6">
+                            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+                                <span class="text-xs text-slate-400 block mb-1">原始檔案大小</span>
+                                <span id="orig-filesize-text" class="text-lg font-bold text-slate-300">-</span>
+                            </div>
+                            <div class="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-xl">
+                                <span class="text-xs text-indigo-300 block mb-1">壓縮後檔案大小</span>
+                                <span id="new-filesize-text" class="text-xl font-extrabold text-emerald-400">-</span>
+                            </div>
+                        </div>
+                        <div id="compression-stats" class="text-xs text-slate-400 bg-slate-900/40 p-3 rounded-xl border border-slate-800 space-y-1 hidden">
+                            <p>壓縮比率: <span id="stat-ratio" class="text-indigo-400 font-semibold">-</span></p>
+                            <p>調校畫質係數: <span id="stat-quality" class="text-purple-400 font-semibold">-</span></p>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-700/50 flex justify-end">
+                        <button id="download-compressed-btn" disabled onclick="downloadCompressed()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm rounded-xl transition-all">
+                            <i class="fa-solid fa-download mr-1"></i> 下載壓縮後圖片
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: Filters & Watermark -->
+        <div id="tab-edit" class="tab-content hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-5 space-y-6">
+                <!-- Filters panel -->
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-sliders text-pink-400"></i>
+                        <span>影像濾鏡與旋轉</span>
+                    </h3>
+
+                    <!-- Brightness & Contrast -->
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">亮度 (Brightness)</span>
+                                <span id="val-brightness" class="text-pink-400">100%</span>
+                            </div>
+                            <input type="range" id="flt-brightness" min="0" max="200" value="100" oninput="applyFilters()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">對比 (Contrast)</span>
+                                <span id="val-contrast" class="text-pink-400">100%</span>
+                            </div>
+                            <input type="range" id="flt-contrast" min="0" max="200" value="100" oninput="applyFilters()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">飽和度 (Saturate)</span>
+                                <span id="val-saturate" class="text-pink-400">100%</span>
+                            </div>
+                            <input type="range" id="flt-saturate" min="0" max="200" value="100" oninput="applyFilters()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">模糊 (Blur)</span>
+                                <span id="val-blur" class="text-pink-400">0px</span>
+                            </div>
+                            <input type="range" id="flt-blur" min="0" max="10" value="0" step="0.5" oninput="applyFilters()" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                        </div>
+                    </div>
+
+                    <!-- Quick Color Effects -->
+                    <div class="flex space-x-2 pt-2">
+                        <label class="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="flt-grayscale" onchange="applyFilters()" class="rounded accent-pink-500">
+                            <span>黑白 (Grayscale)</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="flt-sepia" onchange="applyFilters()" class="rounded accent-pink-500">
+                            <span>懷舊 (Sepia)</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="flt-invert" onchange="applyFilters()" class="rounded accent-pink-500">
+                            <span>反相 (Invert)</span>
+                        </label>
+                    </div>
+
+                    <!-- Rotate & Flip Buttons -->
+                    <div class="pt-2 border-t border-slate-700/50 flex space-x-2">
+                        <button onclick="rotateImage(-90)" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg text-slate-200"><i class="fa-solid fa-rotate-left mr-1"></i> 左旋 90°</button>
+                        <button onclick="rotateImage(90)" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg text-slate-200"><i class="fa-solid fa-rotate-right mr-1"></i> 右旋 90°</button>
+                        <button onclick="flipImage('h')" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg text-slate-200"><i class="fa-solid fa-arrows-left-right mr-1"></i> 左右翻轉</button>
+                    </div>
+                </div>
+
+                <!-- Watermark panel -->
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-font text-cyan-400"></i>
+                        <span>文字浮水印設定</span>
+                    </h3>
+
+                    <div>
+                        <label class="block text-xs text-slate-300 mb-1">浮水印文字</label>
+                        <input type="text" id="wm-text" placeholder="輸入浮水印文字 (例如: 版權所有)" oninput="applyFilters()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">文字顏色</label>
+                            <input type="color" id="wm-color" value="#ffffff" onchange="applyFilters()" class="w-full h-9 bg-slate-900 border border-slate-700 rounded-xl px-1 py-1 cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">位置</label>
+                            <select id="wm-pos" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2 py-2 text-xs text-slate-200 focus:outline-none">
+                                <option value="bottom-right">右下角</option>
+                                <option value="bottom-left">左下角</option>
+                                <option value="top-right">右上角</option>
+                                <option value="top-left">左上角</option>
+                                <option value="center">正中央</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Filter Canvas -->
+            <div class="lg:col-span-7">
+                <div class="glass-panel p-5 rounded-2xl h-full flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-200 text-base mb-3 border-b border-slate-700/50 pb-2">濾鏡修飾效果預覽</h3>
+                        <div class="checkerboard-bg rounded-xl flex items-center justify-center p-4 min-h-[350px]">
+                            <canvas id="filter-canvas" class="max-w-full max-h-[380px] object-contain rounded shadow-lg hidden"></canvas>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-700/50 flex justify-end">
+                        <button id="download-filter-btn" disabled onclick="downloadFiltered()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-sm rounded-xl transition-all">
+                            <i class="fa-solid fa-download mr-1"></i> 下載編輯後圖片
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: Batch Processing -->
+        <div id="tab-batch" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-5 rounded-2xl">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-4 pb-3 border-b border-slate-700/50">
+                    <div>
+                        <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+                            <i class="fa-solid fa-layer-group text-sky-400"></i>
+                            <span>批次多圖轉換與打包 (.ZIP)</span>
+                        </h3>
+                        <p class="text-xs text-slate-400">一次拖放多張圖片，統一轉換為指定格式與尺寸並打包下載。</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="batch-target-fmt" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                            <option value="image/png">統一轉為 PNG</option>
+                            <option value="image/jpeg">統一轉為 JPG</option>
+                            <option value="image/webp">統一轉為 WEBP</option>
+                        </select>
+                        <button onclick="startBatchProcess()" class="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-sky-600/20">
+                            <i class="fa-solid fa-bolt mr-1"></i> 開始批次轉換並打包 ZIP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- File List Display -->
+                <div id="batch-file-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar p-1">
+                    <div class="col-span-full text-center py-12 text-slate-500">
+                        <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                        <p class="text-sm">尚未加入任何批次圖片，請將多張圖片拖曳至上方區域。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: Color Palette & Base64 Converter -->
+        <div id="tab-palette" class="tab-content hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-6 space-y-6">
+                <!-- Color Palette Extraction -->
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-palette text-purple-400"></i>
+                        <span>主要配色提取 (Dominant Colors)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">自動分析目前圖片的主要色彩色調，點擊色塊即可複製 Hex 色碼。</p>
+                    <div id="palette-container" class="grid grid-cols-5 gap-2 pt-2">
+                        <div class="h-16 bg-slate-800 rounded-xl flex items-center justify-center text-xs text-slate-600">無數據</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-6 space-y-6">
+                <!-- Base64 Converter -->
+                <div class="glass-panel p-5 rounded-2xl space-y-4">
+                    <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2 border-b border-slate-700/50 pb-2">
+                        <i class="fa-solid fa-code text-emerald-400"></i>
+                        <span>圖片 Base64 編碼輸出</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">將圖片直接轉換為網頁可嵌入之 Data URL (Base64)。</p>
+                    <textarea id="base64-output" readonly rows="6" placeholder="上傳圖片後將自動生成 Base64 字串..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-300 font-mono focus:outline-none custom-scrollbar"></textarea>
+                    <button onclick="copyBase64()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center space-x-1">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>複製 Base64 字串</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer Notice (Strictly satisfying user mandates) -->
+    <footer class="mt-12 glass-panel border-t border-slate-800 py-6 px-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-xs text-slate-400 space-y-3 md:space-y-0">
+            <div class="flex items-center space-x-3">
+                <span class="font-bold text-slate-200">PixTools Pro</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">版本資訊: v1.2.0</span>
+            </div>
+            
+            <div class="flex flex-wrap justify-center items-center gap-4 text-center">
+                <span class="text-slate-300 font-medium">製作: AI練習曲</span>
+                <span class="text-slate-600">|</span>
+                <span class="text-amber-400/90 font-medium">歡迎分享，請勿商用</span>
+                <span class="text-slate-600">|</span>
+                <span class="text-slate-400">Updated: Jul.29, 2026</span>
+            </div>
+
+            <div class="text-slate-500">
+                &copy; 2026 PixTools. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Global Application State Variables
+        let loadedImages = []; // Stores File objects
+        let currentMainImg = null; // Loaded HTMLImageElement for single mode
+        let currentMode = 'pixel'; // 'pixel' or 'percent'
+        let originalWidth = 0;
+        let originalHeight = 0;
+        let originalFileSize = 0;
+        let rotateAngle = 0;
+        let isFlippedH = false;
+
+        // On DOM Loaded Initialize Dropzone & Handlers
+        window.onload = function() {
+            initDropzone();
+            console.log("PixTools Pro Initialized. Updated: Jul.29, 2026");
+        };
+
+        // Custom Toast System (Strictly NO alert())
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = "bg-slate-800 border-slate-700 text-slate-200";
+            if (type === 'success') bgClass = "bg-emerald-900/90 border-emerald-500 text-emerald-200";
+            if (type === 'error') bgClass = "bg-rose-900/90 border-rose-500 text-rose-200";
+
+            toast.className = `pointer-events-auto flex items-center px-4 py-3 rounded-xl border shadow-xl text-xs font-medium space-x-2 transition-all duration-300 transform translate-x-10 opacity-0 ${bgClass}`;
+            toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-x-10', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-600/30');
+                btn.classList.add('bg-slate-800', 'text-slate-300');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+            activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-600/30');
+        }
+
+        // Dropzone & File Input Handlers
+        function initDropzone() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-indigo-500', 'bg-slate-800/80');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-indigo-500', 'bg-slate-800/80');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-indigo-500', 'bg-slate-800/80');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFiles(e.dataTransfer.files);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFiles(e.target.files);
+                }
+            });
+        }
+
+        // Handle Images Upload Pipeline
+        function handleFiles(files) {
+            loadedImages = Array.from(files);
+            if (loadedImages.length === 0) return;
+
+            const firstFile = loadedImages[0];
+            originalFileSize = firstFile.size;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    currentMainImg = img;
+                    originalWidth = img.width;
+                    originalHeight = img.height;
+
+                    // Set input default pixel dimensions
+                    document.getElementById('resize-width').value = originalWidth;
+                    document.getElementById('resize-height').value = originalHeight;
+
+                    // Update Badge info
+                    document.getElementById('img-info-badge').innerText = `${firstFile.name} (${originalWidth}x${originalHeight}px, ${formatBytes(originalFileSize)})`;
+                    document.getElementById('orig-filesize-text').innerText = formatBytes(originalFileSize);
+
+                    // Render Main Canvas
+                    drawOriginalToCanvas();
+                    applyFilters();
+                    extractPalette(img);
+                    updateBase64Output(evt.target.result);
+                    renderBatchList();
+
+                    showToast(`已成功載入圖片: ${firstFile.name}`, 'success');
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(firstFile);
+        }
+
+        // Draw Image to Preview Canvas
+        function drawOriginalToCanvas() {
+            if (!currentMainImg) return;
+            const canvas = document.getElementById('main-canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
+            ctx.drawImage(currentMainImg, 0, 0);
+
+            canvas.classList.remove('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('download-btn').disabled = false;
+
+            document.getElementById('out-dim-info').innerText = `${canvas.width} x ${canvas.height} px`;
+            document.getElementById('out-fmt-info').innerText = document.getElementById('convert-format').value.split('/')[1].toUpperCase();
+        }
+
+        // Resize Modes
+        function setResizeMode(mode) {
+            currentMode = mode;
+            const pxInputs = document.getElementById('resize-pixel-inputs');
+            const pctInputs = document.getElementById('resize-percent-inputs');
+            const pxBtn = document.getElementById('mode-pixel-btn');
+            const pctBtn = document.getElementById('mode-percent-btn');
+
+            if (mode === 'pixel') {
+                pxInputs.classList.remove('hidden');
+                pctInputs.classList.add('hidden');
+                pxBtn.className = "py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition-all";
+                pctBtn.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all";
+            } else {
+                pxInputs.classList.add('hidden');
+                pctInputs.classList.remove('hidden');
+                pctBtn.className = "py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition-all";
+                pxBtn.className = "py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all";
+            }
+        }
+
+        function onWidthChange() {
+            if (!currentMainImg) return;
+            const w = parseInt(document.getElementById('resize-width').value) || 0;
+            const keepRatio = document.getElementById('keep-aspect').checked;
+            if (keepRatio && originalWidth > 0) {
+                const ratio = originalHeight / originalWidth;
+                document.getElementById('resize-height').value = Math.round(w * ratio);
+            }
+        }
+
+        function onHeightChange() {
+            if (!currentMainImg) return;
+            const h = parseInt(document.getElementById('resize-height').value) || 0;
+            const keepRatio = document.getElementById('keep-aspect').checked;
+            if (keepRatio && originalHeight > 0) {
+                const ratio = originalWidth / originalHeight;
+                document.getElementById('resize-width').value = Math.round(h * ratio);
+            }
+        }
+
+        function onPercentChange(val) {
+            document.getElementById('percent-val').innerText = `${val}%`;
+            if (!currentMainImg) return;
+            const scale = val / 100;
+            document.getElementById('resize-width').value = Math.round(originalWidth * scale);
+            document.getElementById('resize-height').value = Math.round(originalHeight * scale);
+        }
+
+        function applyPresetSize(w, h) {
+            setResizeMode('pixel');
+            document.getElementById('keep-aspect').checked = false;
+            document.getElementById('resize-width').value = w;
+            document.getElementById('resize-height').value = h;
+            showToast(`已套用預設尺寸: ${w} x ${h} px`);
+        }
+
+        function handleFormatChange() {
+            const fmt = document.getElementById('convert-format').value;
+            const qContainer = document.getElementById('quality-container');
+            const icoOptions = document.getElementById('ico-options');
+
+            if (fmt === 'image/jpeg' || fmt === 'image/webp') {
+                qContainer.classList.remove('hidden');
+            } else {
+                qContainer.classList.add('hidden');
+            }
+
+            if (fmt === 'image/x-icon') {
+                icoOptions.classList.remove('hidden');
+            } else {
+                icoOptions.classList.add('hidden');
+            }
+            if (currentMainImg) document.getElementById('out-fmt-info').innerText = fmt.split('/')[1].toUpperCase();
+        }
+
+        function updateQualityVal(val) {
+            document.getElementById('quality-val').innerText = `${val}%`;
+        }
+
+        // Convert and Process Action
+        function processAndConvert() {
+            if (!currentMainImg) {
+                showToast("請先上傳圖片！", "error");
+                return;
+            }
+
+            const canvas = document.getElementById('main-canvas');
+            const ctx = canvas.getContext('2d');
+            const targetW = parseInt(document.getElementById('resize-width').value) || originalWidth;
+            const targetH = parseInt(document.getElementById('resize-height').value) || originalHeight;
+
+            canvas.width = targetW;
+            canvas.height = targetH;
+
+            ctx.clearRect(0, 0, targetW, targetH);
+            ctx.drawImage(currentMainImg, 0, 0, targetW, targetH);
+
+            document.getElementById('out-dim-info').innerText = `${targetW} x ${targetH} px`;
+            showToast("圖片轉換處理完成！", "success");
+        }
+
+        // Icon Generator Helper (Pure JS ICO binary encoder)
+        function generateICO(sourceCanvas, targetSizes) {
+            // Helper function to build native ICO file from canvas sizes
+            const buffers = [];
+            targetSizes.forEach(size => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = size;
+                tempCanvas.height = size;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.drawImage(sourceCanvas, 0, 0, size, size);
+                
+                // Extract PNG binary string
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                const base64 = dataUrl.split(',')[1];
+                const binaryStr = atob(base64);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+                buffers.push({ size, bytes });
+            });
+
+            // Calculate ICO headers
+            const count = buffers.length;
+            let headerSize = 6 + (count * 16);
+            let currentOffset = headerSize;
+
+            let totalLength = headerSize;
+            buffers.forEach(b => totalLength += b.bytes.length);
+
+            const icoArray = new Uint8Array(totalLength);
+            const view = new DataView(icoArray.buffer);
+
+            // ICONDIR
+            view.setUint16(0, 0, true); // Reserved
+            view.setUint16(2, 1, true); // Type 1 = ICO
+            view.setUint16(4, count, true); // Image Count
+
+            let dirOffset = 6;
+            buffers.forEach(b => {
+                const w = b.size >= 256 ? 0 : b.size;
+                const h = b.size >= 256 ? 0 : b.size;
+                view.setUint8(dirOffset, w);
+                view.setUint8(dirOffset + 1, h);
+                view.setUint8(dirOffset + 2, 0); // Palette count
+                view.setUint8(dirOffset + 3, 0); // Reserved
+                view.setUint16(dirOffset + 4, 1, true); // Color planes
+                view.setUint16(dirOffset + 6, 32, true); // Bits per pixel
+                view.setUint32(dirOffset + 8, b.bytes.length, true); // Size
+                view.setUint32(dirOffset + 12, currentOffset, true); // Offset
+
+                icoArray.set(b.bytes, currentOffset);
+                currentOffset += b.bytes.length;
+                dirOffset += 16;
+            });
+
+            return new Blob([icoArray], { type: 'image/x-icon' });
+        }
+
+        // Single File Download Handler
+        function downloadResult() {
+            const canvas = document.getElementById('main-canvas');
+            const format = document.getElementById('convert-format').value;
+            const quality = parseInt(document.getElementById('quality-range').value) / 100;
+
+            if (format === 'image/x-icon') {
+                const sizeCheckboxes = document.querySelectorAll('.ico-size-chk:checked');
+                const sizes = Array.from(sizeCheckboxes).map(c => parseInt(c.value));
+                if (sizes.length === 0) sizes.push(32, 64);
+
+                const icoBlob = generateICO(canvas, sizes);
+                saveAs(icoBlob, "favicon.ico");
+                showToast("Desktop Icon (.ico) 下載成功！", "success");
+                return;
+            }
+
+            canvas.toBlob((blob) => {
+                const ext = format.split('/')[1] === 'jpeg' ? 'jpg' : format.split('/')[1];
+                saveAs(blob, `converted_image.${ext}`);
+                showToast("圖片下載成功！", "success");
+            }, format, quality);
+        }
+
+        // Target File Size Compression Algorithm
+        function setTargetSize(val, unit) {
+            document.getElementById('target-size-input').value = val;
+            document.getElementById('target-size-unit').value = unit;
+        }
+
+        function compressToTargetSize() {
+            if (!currentMainImg) {
+                showToast("請先上傳圖片！", "error");
+                return;
+            }
+
+            const val = parseFloat(document.getElementById('target-size-input').value);
+            const unit = document.getElementById('target-size-unit').value;
+            const targetBytes = unit === 'MB' ? val * 1024 * 1024 : val * 1024;
+            const format = document.getElementById('filesize-format').value;
+
+            let low = 0.01;
+            let high = 1.0;
+            let bestQuality = 0.5;
+            let finalBlob = null;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalWidth;
+            tempCanvas.height = originalHeight;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.drawImage(currentMainImg, 0, 0);
+
+            // Binary search to find optimal quality setting
+            for (let i = 0; i < 8; i++) {
+                bestQuality = (low + high) / 2;
+                const dataUrl = tempCanvas.toDataURL(format, bestQuality);
+                const byteString = atob(dataUrl.split(',')[1]);
+                if (byteString.length > targetBytes) {
+                    high = bestQuality;
+                } else {
+                    low = bestQuality;
+                }
+            }
+
+            const dataUrl = tempCanvas.toDataURL(format, bestQuality);
+            const byteString = atob(dataUrl.split(',')[1]);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            finalBlob = new Blob([ab], { type: format });
+
+            window.currentCompressedBlob = finalBlob;
+            document.getElementById('new-filesize-text').innerText = formatBytes(finalBlob.size);
+            document.getElementById('download-compressed-btn').disabled = false;
+
+            document.getElementById('compression-stats').classList.remove('hidden');
+            document.getElementById('stat-ratio').innerText = `${((finalBlob.size / originalFileSize) * 100).toFixed(1)}%`;
+            document.getElementById('stat-quality').innerText = `${Math.round(bestQuality * 100)}%`;
+
+            showToast("指定大小壓縮完成！", "success");
+        }
+
+        function downloadCompressed() {
+            if (window.currentCompressedBlob) {
+                saveAs(window.currentCompressedBlob, "compressed_image.jpg");
+            }
+        }
+
+        // Filters & Watermark Canvas Engine
+        function applyFilters() {
+            if (!currentMainImg) return;
+            const canvas = document.getElementById('filter-canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
+
+            const b = document.getElementById('flt-brightness').value;
+            const c = document.getElementById('flt-contrast').value;
+            const s = document.getElementById('flt-saturate').value;
+            const blur = document.getElementById('flt-blur').value;
+            const gray = document.getElementById('flt-grayscale').checked ? 100 : 0;
+            const sepia = document.getElementById('flt-sepia').checked ? 100 : 0;
+            const invert = document.getElementById('flt-invert').checked ? 100 : 0;
+
+            document.getElementById('val-brightness').innerText = `${b}%`;
+            document.getElementById('val-contrast').innerText = `${c}%`;
+            document.getElementById('val-saturate').innerText = `${s}%`;
+            document.getElementById('val-blur').innerText = `${blur}px`;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+
+            // Set filter string
+            ctx.filter = `brightness(${b}%) contrast(${c}%) saturate(${s}%) blur(${blur}px) grayscale(${gray}%) sepia(${sepia}%) invert(${invert}%)`;
+
+            // Draw image
+            ctx.drawImage(currentMainImg, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            // Render Text Watermark
+            const wmText = document.getElementById('wm-text').value;
+            if (wmText.trim() !== '') {
+                const fontPx = Math.max(16, Math.round(canvas.width / 25));
+                ctx.font = `bold ${fontPx}px Inter, sans-serif`;
+                ctx.fillStyle = document.getElementById('wm-color').value;
+                ctx.globalAlpha = 0.7;
+
+                const pos = document.getElementById('wm-pos').value;
+                const metrics = ctx.measureText(wmText);
+                let x = 20, y = fontPx + 20;
+
+                if (pos === 'bottom-right') {
+                    x = canvas.width - metrics.width - 20;
+                    y = canvas.height - 20;
+                } else if (pos === 'bottom-left') {
+                    x = 20;
+                    y = canvas.height - 20;
+                } else if (pos === 'top-right') {
+                    x = canvas.width - metrics.width - 20;
+                    y = fontPx + 20;
+                } else if (pos === 'center') {
+                    x = (canvas.width - metrics.width) / 2;
+                    y = canvas.height / 2;
+                }
+
+                ctx.fillText(wmText, x, y);
+            }
+
+            canvas.classList.remove('hidden');
+            document.getElementById('download-filter-btn').disabled = false;
+        }
+
+        function rotateImage(deg) {
+            if (!currentMainImg) return;
+            rotateAngle = (rotateAngle + deg) % 360;
+            applyFilters();
+            showToast(`已旋轉 ${rotateAngle}°`);
+        }
+
+        function flipImage(dir) {
+            if (!currentMainImg) return;
+            isFlippedH = !isFlippedH;
+            applyFilters();
+            showToast("已執行水平翻轉");
+        }
+
+        function downloadFiltered() {
+            const canvas = document.getElementById('filter-canvas');
+            canvas.toBlob((blob) => {
+                saveAs(blob, "edited_image.png");
+            });
+        }
+
+        // Batch Processing Handlers
+        function renderBatchList() {
+            const container = document.getElementById('batch-file-list');
+            if (loadedImages.length === 0) return;
+
+            container.innerHTML = '';
+            loadedImages.forEach((file, index) => {
+                const card = document.createElement('div');
+                card.className = "glass-card p-3 rounded-xl flex items-center space-x-3";
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                        <i class="fa-regular fa-image"></i>
+                    </div>
+                    <div class="flex-grow min-w-0 text-left">
+                        <p class="text-xs font-semibold text-slate-200 truncate">${file.name}</p>
+                        <p class="text-[10px] text-slate-400">${formatBytes(file.size)}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function startBatchProcess() {
+            if (loadedImages.length === 0) {
+                showToast("請先選擇多張圖片！", "error");
+                return;
+            }
+
+            const zip = new JSZip();
+            const targetFormat = document.getElementById('batch-target-fmt').value;
+            const ext = targetFormat.split('/')[1];
+
+            showToast("正在批次處理中，請稍候...", "info");
+
+            for (let i = 0; i < loadedImages.length; i++) {
+                const file = loadedImages[i];
+                const img = await loadImageFromFile(file);
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                const dataUrl = canvas.toDataURL(targetFormat, 0.9);
+                const base64Data = dataUrl.split(',')[1];
+                const cleanName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                zip.file(`${cleanName}_converted.${ext}`, base64Data, { base64: true });
+            }
+
+            zip.generateAsync({ type: "blob" }).then((content) => {
+                saveAs(content, "batch_converted_images.zip");
+                showToast("批次打包下載完成！", "success");
+            });
+        }
+
+        function loadImageFromFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Palette Extraction
+        function extractPalette(img) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 50;
+            canvas.height = 50;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, 50, 50);
+
+            const imageData = ctx.getImageData(0, 0, 50, 50).data;
+            const colors = [];
+
+            for (let i = 0; i < imageData.length; i += 40) {
+                const r = imageData[i];
+                const g = imageData[i + 1];
+                const b = imageData[i + 2];
+                const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                colors.push(hex);
+            }
+
+            const uniqueColors = [...new Set(colors)].slice(0, 5);
+            const container = document.getElementById('palette-container');
+            container.innerHTML = '';
+
+            uniqueColors.forEach(color => {
+                const box = document.createElement('div');
+                box.className = "h-16 rounded-xl cursor-pointer flex flex-col justify-end p-2 transition-transform hover:scale-105 shadow-md";
+                box.style.backgroundColor = color;
+                box.innerHTML = `<span class="text-[10px] font-mono font-bold bg-slate-900/80 px-1 py-0.5 rounded text-white text-center">${color}</span>`;
+                box.onclick = () => {
+                    navigator.clipboard.writeText(color);
+                    showToast(`已複製色碼: ${color}`);
+                };
+                container.appendChild(box);
+            });
+        }
+
+        // Base64 Text Handler
+        function updateBase64Output(str) {
+            document.getElementById('base64-output').value = str;
+        }
+
+        function copyBase64() {
+            const txt = document.getElementById('base64-output');
+            if (!txt.value) return;
+            txt.select();
+            document.execCommand('copy');
+            showToast("Base64 字串已複製到剪貼簿！", "success");
+        }
+
+        // Helper Utility: Byte Formatter
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
