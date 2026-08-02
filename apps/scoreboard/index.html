@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>比賽流程與比分登錄系統 Pro</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      user-select: none;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const playSoundEffect = (type) => {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!window.audioCtx) {
+          window.audioCtx = new AudioCtx();
+        }
+        if (window.audioCtx.state === 'suspended') {
+          window.audioCtx.resume();
+        }
+        const ctx = window.audioCtx;
+        const now = ctx.currentTime;
+
+        if (type === 'score') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, now); // D5
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.12);
+        } else if (type === 'test') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (type === 'timeup') {
+          [0, 0.25, 0.5, 0.75].forEach((delay, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = idx === 3 ? 'sawtooth' : 'square';
+            osc.frequency.setValueAtTime(idx === 3 ? 1046.5 : 880, now + delay);
+            gain.gain.setValueAtTime(0.4, now + delay);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + delay);
+            osc.stop(now + delay + 0.2);
+          });
+        }
+      } catch (err) {
+        console.log("Audio synth error:", err);
+      }
+    };
+
+    const Icons = {
+      Trophy: () => <i className="fa-solid fa-trophy text-amber-400"></i>,
+      Shield: () => <i className="fa-solid fa-shield-halved text-rose-400"></i>,
+      Crown: () => <i className="fa-solid fa-crown text-yellow-300"></i>,
+      Clock: () => <i className="fa-regular fa-clock"></i>,
+      Users: () => <i className="fa-solid fa-users"></i>,
+      Plus: () => <i className="fa-solid fa-plus"></i>,
+      Minus: () => <i className="fa-solid fa-minus"></i>,
+      Play: () => <i className="fa-solid fa-play"></i>,
+      Pause: () => <i className="fa-solid fa-pause"></i>,
+      RotateLeft: () => <i className="fa-solid fa-rotate-left"></i>,
+      Check: () => <i className="fa-solid fa-check"></i>,
+      Book: () => <i className="fa-solid fa-book-bookmark"></i>,
+      Shuffle: () => <i className="fa-solid fa-shuffle"></i>,
+      Download: () => <i className="fa-solid fa-file-export"></i>,
+      Upload: () => <i className="fa-solid fa-file-import"></i>,
+      Refresh: () => <i className="fa-solid fa-arrows-rotate"></i>,
+      Swap: () => <i className="fa-solid fa-right-left"></i>,
+      Volume: () => <i className="fa-solid fa-volume-high"></i>,
+      Zap: () => <i className="fa-solid fa-bolt text-yellow-400"></i>
+    };
+
+    const processAutoAdvance = (matchesList, mode) => {
+      let matches = matchesList.map(m => ({ ...m }));
+      let changed = true;
+      let loopCount = 0;
+
+      while (changed && loopCount < 50) {
+        changed = false;
+        loopCount++;
+
+        // 1. Resolve BYE Matches Automatically
+        matches.forEach(m => {
+          if (m.status !== 'completed') {
+            if (m.team1 !== 'TBD' && m.team1 !== '輪空 (BYE)' && m.team2 === '輪空 (BYE)') {
+              m.winner = m.team1;
+              m.loser = '輪空 (BYE)';
+              m.score1 = 1; m.score2 = 0;
+              m.sets1 = m.targetSets || 1; m.sets2 = 0;
+              m.status = 'completed';
+              changed = true;
+            } else if (m.team2 !== 'TBD' && m.team2 !== '輪空 (BYE)' && m.team1 === '輪空 (BYE)') {
+              m.winner = m.team2;
+              m.loser = '輪空 (BYE)';
+              m.score1 = 0; m.score2 = 1;
+              m.sets1 = 0; m.sets2 = m.targetSets || 1;
+              m.status = 'completed';
+              changed = true;
+            }
+          }
+        });
+
+        // 2. Propagate Winners and Losers
+        matches.forEach(m => {
+          if (m.status === 'completed') {
+            // Propagate Winner
+            if (m.winner && m.nextMatchId) {
+              const nextM = matches.find(nm => nm.id === m.nextMatchId);
+              if (nextM) {
+                if (nextM.team1 === 'TBD' || nextM.team1 === '勝部冠軍 (TBD)') {
+                  nextM.team1 = m.winner;
+                  changed = true;
+                } else if ((nextM.team2 === 'TBD' || nextM.team2 === '敗部冠軍 (TBD)') && nextM.team1 !== m.winner) {
+                  nextM.team2 = m.winner;
+                  changed = true;
+                }
+              }
+            }
+
+            // Propagate Loser into Loser Bracket
+            if (mode === 'double' && m.loserMatchId) {
+              const loserM = matches.find(lm => lm.id === m.loserMatchId);
+              if (loserM) {
+                const loserToPropagate = (m.loser && m.loser !== '輪空 (BYE)') ? m.loser : '輪空 (BYE)';
+                if (loserM.team1 === 'TBD') {
+                  loserM.team1 = loserToPropagate;
+                  changed = true;
+                } else if (loserM.team2 === 'TBD' && loserM.team1 !== loserToPropagate) {
+                  loserM.team2 = loserToPropagate;
+                  changed = true;
+                }
+              }
+            }
+          }
+        });
+
+        // 3. Mark playable matches as ready
+        matches.forEach(m => {
+          if (m.status !== 'completed') {
+            if (m.team1 !== 'TBD' && m.team2 !== 'TBD' && m.team1 !== '輪空 (BYE)' && m.team2 !== '輪空 (BYE)') {
+              if (m.status !== 'ready' && m.status !== 'in_progress') {
+                m.status = 'ready';
+                changed = true;
+              }
+            }
+          }
+        });
+      }
+
+      return matches;
+    };
+
+    function App() {
+      // Form State
+      const [formTitle, setFormTitle] = React.useState('2026 勇者盃錦標賽');
+      const [formMode, setFormMode] = React.useState('double'); // 'double' or 'single'
+      const [formWinCondition, setFormWinCondition] = React.useState('score');
+      const [formGrandFinalFormat, setFormGrandFinalFormat] = React.useState('bo3'); // 'bo1', 'bo3', 'bo5'
+      const [formRegularFormat, setFormRegularFormat] = React.useState('bo1'); // 'bo1', 'bo3'
+      const [formBracketEngine, setFormBracketEngine] = React.useState('maximal');
+      const [formMatchTimeMin, setFormMatchTimeMin] = React.useState(10);
+      const [formMatchTimeSec, setFormMatchTimeSec] = React.useState(0);
+      const [formTargetScore, setFormTargetScore] = React.useState(21);
+      const [formPairingMode, setFormPairingMode] = React.useState('seeded');
+      const [formTeamInput, setFormTeamInput] = React.useState("極速隊\n猛虎隊\n飛龍隊\n神鷹隊\n黑豹隊\n狂風隊");
+
+      // Modals State
+      const [showRosterModal, setShowRosterModal] = React.useState(false);
+      const [showExportModal, setShowExportModal] = React.useState(false);
+      const [showManualPairingModal, setShowManualPairingModal] = React.useState(false);
+      const [activeBracketTab, setActiveBracketTab] = React.useState('winner');
+
+      // Local Roster Books
+      const [rosterBooks, setRosterBooks] = React.useState([
+        { id: '1', name: '羽球社週二團', members: ['王小明', '李大華', '張阿強', '陳美玲', '林國華', '黃自強'] },
+        { id: '2', name: '公司籃球隊', members: ['雷霆隊', '勇士隊', '公牛隊', '湖人隊', '熱火隊', '綠衫軍', '馬刺隊', '獨行俠隊'] }
+      ]);
+      const [newRosterName, setNewRosterName] = React.useState('');
+      const [manualPairingList, setManualPairingList] = React.useState([]);
+
+      // Tournament Active State
+      const [tournament, setTournament] = React.useState(null);
+      const [selectedMatchId, setSelectedMatchId] = React.useState(null);
+
+      // Timer State
+      const [timerRunning, setTimerRunning] = React.useState(false);
+      const [timerSecondsLeft, setTimerSecondsLeft] = React.useState(0);
+
+      React.useEffect(() => {
+        let interval = null;
+        if (timerRunning && timerSecondsLeft > 0) {
+          interval = setInterval(() => {
+            setTimerSecondsLeft(prev => {
+              if (prev <= 1) {
+                setTimerRunning(false);
+                playSoundEffect('timeup');
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        } else {
+          clearInterval(interval);
+        }
+        return () => clearInterval(interval);
+      }, [timerRunning, timerSecondsLeft]);
+
+      React.useEffect(() => {
+        const savedRosters = localStorage.getItem('tournament_roster_books');
+        if (savedRosters) {
+          try { setRosterBooks(JSON.parse(savedRosters)); } catch (e) {}
+        }
+      }, []);
+
+      const saveRosterBooksToStorage = (updated) => {
+        setRosterBooks(updated);
+        localStorage.setItem('tournament_roster_books', JSON.stringify(updated));
+      };
+
+      const generateTournamentStructure = (teamsList, customPairs = null) => {
+        const rawTeams = teamsList.map(t => t.trim()).filter(Boolean);
+        if (rawTeams.length < 2) {
+          alert('請至少輸入 2 個參賽選手或隊伍！');
+          return null;
+        }
+
+        let teams = [...rawTeams];
+        if (formPairingMode === 'random' && !customPairs) {
+          for (let i = teams.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [teams[i], teams[j]] = [teams[j], teams[i]];
+          }
+        }
+
+        let r1Pairs = [];
+        if (customPairs) {
+          r1Pairs = customPairs;
+        } else if (formBracketEngine === 'maximal') {
+          for (let i = 0; i < teams.length; i += 2) {
+            if (i + 1 < teams.length) {
+              r1Pairs.push([teams[i], teams[i + 1]]);
+            } else {
+              r1Pairs.push([teams[i], '輪空 (BYE)']);
+            }
+          }
+        } else {
+          let power = 2;
+          while (power < teams.length) power *= 2;
+          const numByes = power - teams.length;
+          let teamIdx = 0;
+          const totalR1Matches = power / 2;
+          for (let i = 0; i < totalR1Matches; i++) {
+            const t1 = teamIdx < teams.length ? teams[teamIdx++] : '輪空 (BYE)';
+            const t2 = (teamIdx < teams.length && (i < totalR1Matches - numByes || numByes === 0)) ? teams[teamIdx++] : '輪空 (BYE)';
+            r1Pairs.push([t1, t2]);
+          }
+        }
+
+        let matches = [];
+        let matchCounter = 1;
+        const getTargetSets = (formatStr) => formatStr === 'bo5' ? 3 : formatStr === 'bo3' ? 2 : 1;
+        const regTargetSets = getTargetSets(formRegularFormat);
+        const gfTargetSets = getTargetSets(formGrandFinalFormat);
+
+        // --- 1. Winner Bracket ---
+        const wR1Count = r1Pairs.length;
+        r1Pairs.forEach((pair, idx) => {
+          matches.push({
+            id: `W-1-${idx + 1}`,
+            bracket: 'winner',
+            round: 1,
+            matchNum: matchCounter++,
+            team1: pair[0],
+            team2: pair[1],
+            score1: 0,
+            score2: 0,
+            sets1: 0,
+            sets2: 0,
+            targetSets: regTargetSets,
+            status: 'pending',
+            winner: null,
+            nextMatchId: `W-2-${Math.floor(idx / 2) + 1}`,
+            loserMatchId: formMode === 'double' ? `L-1-${Math.floor(idx / 2) + 1}` : null
+          });
+        });
+
+        // Winner Rounds 2..N
+        let currentWCount = Math.ceil(wR1Count / 2);
+        let currentWRound = 2;
+        let prevWCount = wR1Count;
+
+        while (prevWCount > 1) {
+          for (let i = 0; i < currentWCount; i++) {
+            const isFinalRound = currentWCount === 1;
+            matches.push({
+              id: `W-${currentWRound}-${i + 1}`,
+              bracket: 'winner',
+              round: currentWRound,
+              matchNum: matchCounter++,
+              team1: 'TBD',
+              team2: (i * 2 + 1 >= prevWCount) ? '輪空 (BYE)' : 'TBD',
+              score1: 0, score2: 0, sets1: 0, sets2: 0,
+              targetSets: regTargetSets,
+              status: 'pending',
+              winner: null,
+              nextMatchId: isFinalRound 
+                ? (formMode === 'double' ? 'GF-1' : null) 
+                : `W-${currentWRound + 1}-${Math.floor(i / 2) + 1}`,
+              loserMatchId: formMode === 'double' ? `L-${(currentWRound - 1) * 2}-${i + 1}` : null
+            });
+          }
+          if (currentWCount === 1) break;
+          prevWCount = currentWCount;
+          currentWCount = Math.ceil(currentWCount / 2);
+          currentWRound++;
+        }
+
+        // --- 2. Loser Bracket ---
+        if (formMode === 'double') {
+          const lR1Count = Math.ceil(wR1Count / 2);
+          for (let i = 0; i < lR1Count; i++) {
+            matches.push({
+              id: `L-1-${i + 1}`,
+              bracket: 'loser',
+              round: 1,
+              matchNum: matchCounter++,
+              team1: 'TBD',
+              team2: (i * 2 + 1 >= wR1Count) ? '輪空 (BYE)' : 'TBD',
+              score1: 0, score2: 0, sets1: 0, sets2: 0,
+              targetSets: regTargetSets,
+              status: 'pending',
+              winner: null,
+              nextMatchId: `L-2-${i + 1}`
+            });
+          }
+
+          for (let i = 0; i < lR1Count; i++) {
+            matches.push({
+              id: `L-2-${i + 1}`,
+              bracket: 'loser',
+              round: 2,
+              matchNum: matchCounter++,
+              team1: 'TBD',
+              team2: 'TBD',
+              score1: 0, score2: 0, sets1: 0, sets2: 0,
+              targetSets: regTargetSets,
+              status: 'pending',
+              winner: null,
+              nextMatchId: lR1Count === 1 ? 'GF-1' : `L-3-${Math.floor(i / 2) + 1}`
+            });
+          }
+
+          if (lR1Count > 1) {
+            matches.push({
+              id: `L-3-1`,
+              bracket: 'loser',
+              round: 3,
+              matchNum: matchCounter++,
+              team1: 'TBD',
+              team2: 'TBD',
+              score1: 0, score2: 0, sets1: 0, sets2: 0,
+              targetSets: regTargetSets,
+              status: 'pending',
+              winner: null,
+              nextMatchId: 'GF-1'
+            });
+          }
+
+          // Grand Finals
+          matches.push({
+            id: 'GF-1',
+            bracket: 'grand_final',
+            round: 1,
+            matchNum: matchCounter++,
+            team1: '勝部冠軍 (TBD)',
+            team2: '敗部冠軍 (TBD)',
+            score1: 0, score2: 0, sets1: 0, sets2: 0,
+            targetSets: gfTargetSets,
+            status: 'pending',
+            winner: null,
+            nextMatchId: null
+          });
+        }
+
+        // Run auto-advance solver
+        const resolvedMatches = processAutoAdvance(matches, formMode);
+
+        return {
+          title: formTitle,
+          mode: formMode,
+          winCondition: formWinCondition,
+          bracketEngine: formBracketEngine,
+          matchTimeMin: Number(formMatchTimeMin),
+          matchTimeSec: Number(formMatchTimeSec),
+          targetScore: Number(formTargetScore),
+          teams: rawTeams,
+          matches: resolvedMatches,
+          createdAt: new Date().toLocaleString('zh-TW')
+        };
+      };
+
+      const handleStartTournament = () => {
+        const rawTeams = formTeamInput.split('\n').map(t => t.trim()).filter(Boolean);
+        if (rawTeams.length < 2) {
+          alert('請至少輸入 2 個選手或隊伍名稱！');
+          return;
+        }
+
+        if (formPairingMode === 'manual') {
+          let pairs = [];
+          for (let i = 0; i < rawTeams.length; i += 2) {
+            pairs.push({
+              id: i / 2,
+              t1: rawTeams[i],
+              t2: rawTeams[i + 1] || '輪空 (BYE)'
+            });
+          }
+          setManualPairingList(pairs);
+          setShowManualPairingModal(true);
+          return;
+        }
+
+        const newTourney = generateTournamentStructure(rawTeams);
+        if (newTourney) {
+          setTournament(newTourney);
+          const firstReady = newTourney.matches.find(m => m.status === 'ready');
+          if (firstReady) {
+            setSelectedMatchId(firstReady.id);
+            setTimerSecondsLeft(newTourney.matchTimeMin * 60 + newTourney.matchTimeSec);
+          }
+        }
+      };
+
+      const handleConfirmManualPairing = () => {
+        const rawTeams = formTeamInput.split('\n').map(t => t.trim()).filter(Boolean);
+        const customPairs = manualPairingList.map(p => [p.t1, p.t2]);
+        const newTourney = generateTournamentStructure(rawTeams, customPairs);
+        if (newTourney) {
+          setTournament(newTourney);
+          setShowManualPairingModal(false);
+          const firstReady = newTourney.matches.find(m => m.status === 'ready');
+          if (firstReady) {
+            setSelectedMatchId(firstReady.id);
+            setTimerSecondsLeft(newTourney.matchTimeMin * 60 + newTourney.matchTimeSec);
+          }
+        }
+      };
+
+      const handleScoreChange = (matchId, teamNum, delta) => {
+        if (delta > 0) playSoundEffect('score');
+        setTournament(prev => {
+          if (!prev) return prev;
+          let setWinnerNum = null;
+          const updatedMatches = prev.matches.map(m => {
+            if (m.id !== matchId) return m;
+            let s1 = m.score1;
+            let s2 = m.score2;
+            if (teamNum === 1) s1 = Math.max(0, s1 + delta);
+            if (teamNum === 2) s2 = Math.max(0, s2 + delta);
+
+            if (prev.winCondition === 'score' && delta > 0) {
+              if (s1 >= prev.targetScore) setWinnerNum = 1;
+              else if (s2 >= prev.targetScore) setWinnerNum = 2;
+            }
+
+            return { ...m, score1: s1, score2: s2, status: 'in_progress' };
+          });
+
+          if (setWinnerNum) {
+            setTimeout(() => handleWinSet(matchId, setWinnerNum), 50);
+          }
+
+          return { ...prev, matches: updatedMatches };
+        });
+      };
+
+      const handleWinSet = (matchId, teamNum) => {
+        playSoundEffect('score');
+        setTournament(prev => {
+          if (!prev) return prev;
+          let matchCompleted = false;
+          let completedWinnerNum = null;
+
+          const updatedMatches = prev.matches.map(m => {
+            if (m.id !== matchId) return m;
+            let st1 = m.sets1 || 0;
+            let st2 = m.sets2 || 0;
+            const targetSets = m.targetSets || 1;
+
+            if (teamNum === 1) st1 += 1;
+            if (teamNum === 2) st2 += 1;
+
+            if (st1 >= targetSets || st2 >= targetSets) {
+              matchCompleted = true;
+              completedWinnerNum = st1 >= targetSets ? 1 : 2;
+            }
+
+            return {
+              ...m,
+              sets1: st1,
+              sets2: st2,
+              score1: 0,
+              score2: 0,
+              status: matchCompleted ? 'completed' : 'in_progress'
+            };
+          });
+
+          if (matchCompleted && completedWinnerNum) {
+            setTimeout(() => {
+              handleCompleteMatch(matchId, completedWinnerNum);
+            }, 100);
+            return { ...prev, matches: updatedMatches };
+          }
+
+          const autoResolved = processAutoAdvance(updatedMatches, prev.mode);
+          return { ...prev, matches: autoResolved };
+        });
+      };
+
+      const handleCompleteMatch = (matchId, winnerTeam) => {
+        setTournament(prev => {
+          if (!prev) return prev;
+          let currentMatch = prev.matches.find(m => m.id === matchId);
+          if (!currentMatch) return prev;
+
+          const winnerName = winnerTeam === 1 ? currentMatch.team1 : currentMatch.team2;
+          const loserName = winnerTeam === 1 ? currentMatch.team2 : currentMatch.team1;
+
+          let updatedMatches = prev.matches.map(m => {
+            if (m.id === matchId) {
+              return { ...m, status: 'completed', winner: winnerName, loser: loserName };
+            }
+            return m;
+          });
+
+          const autoResolved = processAutoAdvance(updatedMatches, prev.mode);
+          return { ...prev, matches: autoResolved };
+        });
+
+        // Auto-select next ready match
+        setTimeout(() => {
+          setTournament(latest => {
+            if (!latest) return latest;
+            const nextReady = latest.matches.find(m => m.status === 'ready' && m.id !== matchId);
+            if (nextReady) {
+              setSelectedMatchId(nextReady.id);
+            }
+            return latest;
+          });
+        }, 150);
+      };
+
+      const handleSelectMatchToScore = (m) => {
+        setSelectedMatchId(m.id);
+        if (tournament) {
+          setTimerSecondsLeft(tournament.matchTimeMin * 60 + tournament.matchTimeSec);
+          setTimerRunning(false);
+        }
+      };
+
+      const handleResetTournament = () => {
+        if (window.confirm('確定要清除目前的比賽資料並重新創立賽事嗎？')) {
+          setTournament(null);
+          setSelectedMatchId(null);
+          setTimerRunning(false);
+        }
+      };
+
+      const handleExportJSON = (e) => {
+        if (e) e.preventDefault();
+        if (!tournament) return;
+        try {
+          const jsonStr = JSON.stringify(tournament, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.href = url;
+          downloadAnchor.download = `${tournament.title}_賽事數據.json`;
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          setTimeout(() => {
+            document.body.removeChild(downloadAnchor);
+            URL.revokeObjectURL(url);
+          }, 100);
+        } catch (err) {
+          setShowExportModal(true);
+        }
+      };
+
+      const handleCopyJSON = () => {
+        if (!tournament) return;
+        const jsonStr = JSON.stringify(tournament, null, 2);
+        const textarea = document.createElement('textarea');
+        textarea.value = jsonStr;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          alert('賽事數據 JSON 碼已成功複製到剪貼簿！');
+        } catch (err) {
+          alert('複製失敗，請由視窗中文字方塊全選複製。');
+        }
+        document.body.removeChild(textarea);
+      };
+
+      const handleImportJSON = (event) => {
+        const fileReader = new FileReader();
+        if (event.target.files && event.target.files[0]) {
+          fileReader.readAsText(event.target.files[0], "UTF-8");
+          fileReader.onload = (e) => {
+            try {
+              const importedData = JSON.parse(e.target.result);
+              if (importedData && importedData.matches && importedData.title) {
+                setTournament(importedData);
+                alert('成功匯入賽事檔案！');
+              } else {
+                alert('檔案格式不符合賽事資料標準！');
+              }
+            } catch (err) {
+              alert('讀取 JSON 檔案失敗，請確認檔案內容。');
+            }
+          };
+        }
+      };
+
+      const handleSaveNewRosterBook = () => {
+        const raw = formTeamInput.split('\n').map(t => t.trim()).filter(Boolean);
+        if (!newRosterName.trim()) {
+          alert('請輸入名單冊名稱（如：公司羽球隊）');
+          return;
+        }
+        if (raw.length === 0) {
+          alert('請先填寫選手/隊伍名單！');
+          return;
+        }
+        const updated = [...rosterBooks, { id: Date.now().toString(), name: newRosterName.trim(), members: raw }];
+        saveRosterBooksToStorage(updated);
+        setNewRosterName('');
+        alert('名單存檔成功！');
+      };
+
+      const handleApplyRosterBook = (book) => {
+        setFormTeamInput(book.members.join('\n'));
+        setShowRosterModal(false);
+      };
+
+      const activeMatch = tournament ? tournament.matches.find(m => m.id === selectedMatchId) : null;
+
+      if (!tournament) {
+        return (
+          <div className="max-w-4xl mx-auto p-4 md:p-8">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center gap-2 bg-indigo-900/50 border border-indigo-700/50 text-indigo-300 px-4 py-1.5 rounded-full text-sm font-bold mb-3 shadow">
+                <Icons.Trophy /> 錦標對決系統 Pro
+              </div>
+              <h1 className="text-3xl md:text-4xl font-black text-white tracking-wide">比賽流程與比分登錄系統</h1>
+              <p className="text-slate-400 text-sm mt-2">支援單敗 / 雙敗（含勝部與敗部）淘汰賽、實時記分台、倒數警報音效與名單備份庫</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="md:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <i className="fa-solid fa-sliders text-indigo-400"></i> 賽事基礎設定
+                </h2>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-1">賽事名稱</label>
+                  <input
+                    type="text"
+                    value={formTitle}
+                    onChange={e => setFormTitle(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white font-bold text-sm focus:border-indigo-500 focus:outline-none"
+                    placeholder="請輸入賽事標題..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">賽制類型</label>
+                    <select
+                      value={formMode}
+                      onChange={e => setFormMode(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white text-xs font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="double">🛡️ 雙敗淘汰制 (勝部+敗部)</option>
+                      <option value="single">🥇 單敗淘汰制</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">第一輪對戰配對</label>
+                    <select
+                      value={formPairingMode}
+                      onChange={e => setFormPairingMode(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white text-xs font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="seeded">📋 依輸入順序配對</option>
+                      <option value="random">🎲 隨機亂數抽籤</option>
+                      <option value="manual">✍️ 手動指定第一輪對決</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">一般對決賽制</label>
+                    <select
+                      value={formRegularFormat}
+                      onChange={e => setFormRegularFormat(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white text-xs font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="bo1">1 局定勝負 (BO1)</option>
+                      <option value="bo3">3 戰 2 勝 (BO3)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-400 mb-1">👑 總決賽專屬賽制</label>
+                    <select
+                      value={formGrandFinalFormat}
+                      onChange={e => setFormGrandFinalFormat(e.target.value)}
+                      className="w-full bg-slate-950 border border-amber-800/80 rounded-xl px-3 py-2.5 text-amber-300 text-xs font-bold focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="bo3">🔥 三戰兩勝 (BO3 - 先拿2局)</option>
+                      <option value="bo5">🏆 五戰三勝 (BO5 - 先拿3局)</option>
+                      <option value="bo1">⚡ 一局定勝負 (BO1)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">勝負判定方式</label>
+                    <select
+                      value={formWinCondition}
+                      onChange={e => setFormWinCondition(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white text-xs font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="score">🎯 目標分數勝（如 21 分）</option>
+                      <option value="time">⏱️ 限時高分勝（附帶倒數計時）</option>
+                      <option value="roster">👥 得分點數勝</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">首輪樹狀圖結構</label>
+                    <select
+                      value={formBracketEngine}
+                      onChange={e => setFormBracketEngine(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white text-xs font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="maximal">⚡ 首輪最大化對決（推薦）</option>
+                      <option value="standard">🌳 傳統 2的次方樹狀圖</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1">目標獲勝分數</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formTargetScore}
+                        onChange={e => setFormTargetScore(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-sm font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1">比賽限時 (分 + 秒)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={formMatchTimeMin}
+                          onChange={e => setFormMatchTimeMin(e.target.value)}
+                          className="w-1/2 bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-white font-mono text-xs font-bold text-center"
+                          placeholder="分"
+                        />
+                        <span className="text-slate-500 text-xs font-bold">分</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={formMatchTimeSec}
+                          onChange={e => setFormMatchTimeSec(e.target.value)}
+                          className="w-1/2 bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-white font-mono text-xs font-bold text-center"
+                          placeholder="秒"
+                        />
+                        <span className="text-slate-500 text-xs font-bold">秒</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => playSoundEffect('test')}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition"
+                  >
+                    <Icons.Volume /> 🔊 音效測試
+                  </button>
+
+                  <label className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold cursor-pointer flex items-center gap-1.5 transition">
+                    <Icons.Upload /> 匯入舊賽事檔 (.json)
+                    <input type="file" accept=".json" onChange={handleImportJSON} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="md:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                      <Icons.Users /> 參賽選手 / 隊伍名單 (每行一隊)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowRosterModal(true)}
+                      className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                    >
+                      <Icons.Book /> 叫出名單簿
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows="8"
+                    value={formTeamInput}
+                    onChange={e => setFormTeamInput(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-mono text-sm focus:border-indigo-500 focus:outline-none"
+                    placeholder="極速隊&#10;猛虎隊&#10;飛龍隊&#10;神鷹隊"
+                  ></textarea>
+
+                  <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                    <span>目前的參賽數量：<strong className="text-amber-400">{formTeamInput.split('\n').map(t => t.trim()).filter(Boolean).length}</strong> 組</span>
+                    <button
+                      type="button"
+                      onClick={handleSaveNewRosterBook}
+                      className="text-xs text-slate-400 hover:text-white underline"
+                    >
+                      💾 存為常用名單簿
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleStartTournament}
+                  className="w-full mt-6 py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-lg shadow-lg hover:shadow-indigo-500/25 transition transform active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Icons.Zap /> 生成樹狀圖並開始賽事
+                </button>
+              </div>
+            </div>
+
+            {/* Roster Book Modal */}
+            {showRosterModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+                  <button type="button" onClick={() => setShowRosterModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Icons.Book /> 本機常用名單簿
+                  </h3>
+
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {rosterBooks.map(book => (
+                      <div key={book.id} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between hover:border-indigo-500 transition">
+                        <div>
+                          <div className="font-bold text-sm text-white">{book.name}</div>
+                          <div className="text-xs text-slate-500">{book.members.length} 人/隊：{book.members.slice(0, 3).join(', ')}...</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyRosterBook(book)}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                        >
+                          帶入名單
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-800">
+                    <label className="block text-xs font-bold text-slate-400 mb-1">另存目前名單名稱</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newRosterName}
+                        onChange={e => setNewRosterName(e.target.value)}
+                        placeholder="例如：羽球週五團..."
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveNewRosterBook}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                      >
+                        儲存
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Pairing Modal */}
+            {showManualPairingModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+                  <button type="button" onClick={() => setShowManualPairingModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    ✍️ 第一輪對戰手動配對
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-4">請指定第一輪各場次的對戰隊伍：</p>
+
+                  <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+                    {manualPairingList.map((pair, idx) => (
+                      <div key={idx} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-indigo-400 w-16">第 {idx + 1} 場</span>
+                        <select
+                          value={pair.t1}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setManualPairingList(prev => prev.map((p, i) => i === idx ? { ...p, t1: val } : p));
+                          }}
+                          className="bg-slate-900 border border-slate-800 text-xs font-bold text-white rounded-lg p-2 flex-1"
+                        >
+                          {formTeamInput.split('\n').map(t => t.trim()).filter(Boolean).concat(['輪空 (BYE)']).map((t, i) => (
+                            <option key={i} value={t}>{t}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualPairingList(prev => prev.map((p, i) => i === idx ? { ...p, t1: p.t2, t2: p.t1 } : p));
+                          }}
+                          className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                          title="對調位置"
+                        >
+                          <Icons.Swap />
+                        </button>
+                        <select
+                          value={pair.t2}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setManualPairingList(prev => prev.map((p, i) => i === idx ? { ...p, t2: val } : p));
+                          }}
+                          className="bg-slate-900 border border-slate-800 text-xs font-bold text-white rounded-lg p-2 flex-1"
+                        >
+                          {formTeamInput.split('\n').map(t => t.trim()).filter(Boolean).concat(['輪空 (BYE)']).map((t, i) => (
+                            <option key={i} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualPairingModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmManualPairing}
+                      className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                    >
+                      確認賽程並開始
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <footer className="mt-10 pt-6 border-t border-slate-800/80 text-center text-xs text-slate-500 space-y-1">
+              <div className="flex items-center justify-center gap-2 md:gap-3 font-medium text-slate-400 flex-wrap">
+                <span className="bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-md text-[11px] text-indigo-400 font-bold">v2.5 Pro</span>
+                <span>•</span>
+                <span>製作：<strong className="text-slate-300">AI練習曲</strong></span>
+                <span>•</span>
+                <span>Updated: <span className="font-mono text-slate-400">2026.08.01</span></span>
+              </div>
+              <div className="text-[11px] text-slate-600 font-medium">
+                🔒 歡迎分享，請勿商用
+              </div>
+            </footer>
+          </div>
+        );
+      }
+
+      const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      };
+
+      const visibleMatches = tournament.matches.filter(m => {
+        if (tournament.mode === 'single') return m.bracket === 'winner';
+        return m.bracket === activeBracketTab;
+      });
+
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+          <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 sticky top-0 z-40 shadow-lg">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-white text-lg shadow">
+                  🏆
+                </div>
+                <div>
+                  <h1 className="font-black text-white text-base md:text-lg leading-tight">{tournament.title}</h1>
+                  <span className="text-xs font-bold text-indigo-400">
+                    {tournament.mode === 'double' ? '🛡️ 雙敗淘汰賽 (含勝部/敗部)' : '🥇 單敗淘汰賽'} • 目標 {tournament.targetScore} 分
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(true)}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700 text-xs font-bold flex items-center gap-1.5 shadow transition"
+                >
+                  <Icons.Download /> 匯出與備份
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetTournament}
+                  className="p-2 rounded-lg bg-red-950/50 hover:bg-red-900/60 text-red-400 border border-red-800/50 transition"
+                  title="重新設定賽事"
+                >
+                  <Icons.Refresh />
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Live Arena Control Panel */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Icons.Zap /> 實時記分控制台
+                  </span>
+                  {activeMatch && (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300">
+                      對決場次 #{activeMatch.matchNum} ({activeMatch.id})
+                    </span>
+                  )}
+                </div>
+
+                {activeMatch ? (
+                  <div className="space-y-6">
+                    {(activeMatch.targetSets > 1) && (
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-amber-900/40 text-center">
+                        <div className="text-xs font-black text-amber-400 mb-1">
+                          賽事局數對決：{activeMatch.targetSets === 3 ? '五戰三勝 (BO5)' : '三戰兩勝 (BO3)'}
+                        </div>
+                        <div className="flex justify-around items-center text-xs font-bold text-slate-300">
+                          <div>{activeMatch.team1}：<span className="text-emerald-400 font-mono text-base">{activeMatch.sets1 || 0}</span> 局</div>
+                          <div className="text-slate-500">VS</div>
+                          <div>{activeMatch.team2}：<span className="text-emerald-400 font-mono text-base">{activeMatch.sets2 || 0}</span> 局</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Team 1 */}
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center space-y-3">
+                        <div className="text-xs font-bold text-indigo-400 truncate">{activeMatch.team1}</div>
+                        <div className="text-5xl font-black text-white font-mono">{activeMatch.score1}</div>
+                        <div className="flex justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleScoreChange(activeMatch.id, 1, 1)}
+                            className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-sm shadow active:scale-95 transition"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleScoreChange(activeMatch.id, 1, -1)}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-sm active:scale-95 transition"
+                          >
+                            -1
+                          </button>
+                        </div>
+                        {(activeMatch.targetSets > 1) && (
+                          <button
+                            type="button"
+                            onClick={() => handleWinSet(activeMatch.id, 1)}
+                            className="w-full py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 font-bold rounded-lg text-xs transition"
+                          >
+                            🎯 贏得此局 (+1局)
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleCompleteMatch(activeMatch.id, 1)}
+                          className="w-full py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/60 font-bold rounded-lg text-xs transition"
+                        >
+                          🏆 直接判定整場獲勝
+                        </button>
+                      </div>
+
+                      {/* Team 2 */}
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center space-y-3">
+                        <div className="text-xs font-bold text-rose-400 truncate">{activeMatch.team2}</div>
+                        <div className="text-5xl font-black text-white font-mono">{activeMatch.score2}</div>
+                        <div className="flex justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleScoreChange(activeMatch.id, 2, 1)}
+                            className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-sm shadow active:scale-95 transition"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleScoreChange(activeMatch.id, 2, -1)}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-sm active:scale-95 transition"
+                          >
+                            -1
+                          </button>
+                        </div>
+                        {(activeMatch.targetSets > 1) && (
+                          <button
+                            type="button"
+                            onClick={() => handleWinSet(activeMatch.id, 2)}
+                            className="w-full py-1.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 font-bold rounded-lg text-xs transition"
+                          >
+                            🎯 贏得此局 (+1局)
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleCompleteMatch(activeMatch.id, 2)}
+                          className="w-full py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/60 font-bold rounded-lg text-xs transition"
+                        >
+                          🏆 直接判定整場獲勝
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center space-y-3">
+                      <div className="text-3xl font-black font-mono text-amber-400 tracking-wider">
+                        {formatTime(timerSecondsLeft)}
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTimerRunning(!timerRunning)}
+                          className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${timerRunning ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}
+                        >
+                          {timerRunning ? <Icons.Pause /> : <Icons.Play />} {timerRunning ? '暫停計時' : '開始倒數'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimerRunning(false);
+                            setTimerSecondsLeft(tournament.matchTimeMin * 60 + tournament.matchTimeSec);
+                          }}
+                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
+                        >
+                          <Icons.RotateLeft /> 重設時間
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => playSoundEffect('test')}
+                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
+                          title="測試音效"
+                        >
+                          <Icons.Volume />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-500 font-bold text-sm">
+                    👈 請在右側賽程樹狀圖或下方預備佇列點選「⚡ 載入記分」以開始比賽
+                  </div>
+                )}
+              </div>
+
+              {/* Up Next Queue */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Icons.Clock /> 即將登場 / 下一局預備
+                </h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {tournament.matches
+                    .filter(m => m.status === 'ready' && m.id !== selectedMatchId)
+                    .map(m => (
+                      <div key={m.id} className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-white">{m.team1} <span className="text-slate-500">VS</span> {m.team2}</div>
+                          <div className="text-[10px] text-slate-500">
+                            #{m.matchNum} • {m.bracket === 'winner' ? '勝部' : m.bracket === 'loser' ? '敗部' : '總決賽'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectMatchToScore(m)}
+                          className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                        >
+                          ⚡ 載入記分
+                        </button>
+                      </div>
+                    ))}
+                  {tournament.matches.filter(m => m.status === 'ready').length === 0 && (
+                    <div className="text-center text-xs text-slate-500 py-3">目前無等待中的對決</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bracket Visualization (Top Aligned) */}
+            <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+              {tournament.mode === 'double' ? (
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-800 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveBracketTab('winner')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+                      activeBracketTab === 'winner'
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <Icons.Trophy /> 🏆 勝部賽程 (Winner)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveBracketTab('loser')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+                      activeBracketTab === 'loser'
+                        ? 'bg-rose-600 text-white shadow'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <Icons.Shield /> 🛡️ 敗部賽程 (Loser)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveBracketTab('grand_final')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+                      activeBracketTab === 'grand_final'
+                        ? 'bg-amber-600 text-white shadow'
+                        : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <Icons.Crown /> 👑 總決賽 (Finals)
+                  </button>
+                </div>
+              ) : (
+                <h2 className="text-sm font-black text-white uppercase tracking-wider mb-4 border-b border-slate-800 pb-3 flex items-center gap-2">
+                  <Icons.Trophy /> 單敗淘汰賽對戰樹狀圖
+                </h2>
+              )}
+
+              <div className="flex-1 overflow-x-auto">
+                <div className="min-w-[600px] flex justify-start items-start gap-6 pb-4">
+                  {Array.from(new Set(visibleMatches.map(m => m.round))).map(roundNum => {
+                    const roundMatches = visibleMatches.filter(m => m.round === roundNum);
+                    return (
+                      <div key={roundNum} className="flex-1 space-y-4">
+                        <div className="text-xs font-extrabold text-indigo-400 text-center bg-slate-950 py-1.5 rounded-lg border border-slate-800">
+                          {activeBracketTab === 'grand_final' ? '👑 總決賽' : `第 ${roundNum} 輪`}
+                        </div>
+                        <div className="space-y-4">
+                          {roundMatches.map(m => {
+                            const isSelected = m.id === selectedMatchId;
+                            return (
+                              <div
+                                key={m.id}
+                                className={`p-3 rounded-xl border transition relative ${
+                                  isSelected
+                                    ? 'bg-indigo-950/70 border-indigo-500 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500'
+                                    : m.status === 'completed'
+                                    ? 'bg-slate-950/60 border-slate-800/80 opacity-80'
+                                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold mb-1.5">
+                                  <span>#{m.matchNum} ({m.id})</span>
+                                  <span>{m.status === 'completed' ? '已完成' : m.status === 'ready' ? '準備中' : '等待晉級'}</span>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-between ${m.winner === m.team1 ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50' : 'text-slate-300'}`}>
+                                    <span className="truncate">{m.team1}</span>
+                                    <span className="font-mono">
+                                      {m.targetSets > 1 ? `[${m.sets1 || 0}局] ${m.score1}` : m.score1}
+                                    </span>
+                                  </div>
+                                  <div className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-between ${m.winner === m.team2 ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50' : 'text-slate-300'}`}>
+                                    <span className="truncate">{m.team2}</span>
+                                    <span className="font-mono">
+                                      {m.targetSets > 1 ? `[${m.sets2 || 0}局] ${m.score2}` : m.score2}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {m.status !== 'completed' && m.team1 !== 'TBD' && m.team2 !== 'TBD' && m.team1 !== '輪空 (BYE)' && m.team2 !== '輪空 (BYE)' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectMatchToScore(m)}
+                                    className="w-full mt-2.5 py-1 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white font-bold text-[11px] transition flex items-center justify-center gap-1 shadow"
+                                  >
+                                    ⚡ 載入記分
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {visibleMatches.length === 0 && (
+                    <div className="w-full text-center py-12 text-slate-500 font-bold text-xs">
+                      目前此頁籤尚無比賽資料
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </main>
+
+          {/* Export & Backup Modal */}
+          {showExportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+                <button type="button" onClick={() => setShowExportModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
+                <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                  <Icons.Download /> 匯出賽事數據與戰報
+                </h3>
+                <p className="text-xs text-slate-400 mb-4">您可以將賽事匯出為 JSON 備份檔，或複製數據備忘：</p>
+
+                <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={handleExportJSON}
+                      className="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow flex items-center justify-center gap-2 transition"
+                    >
+                      <Icons.Download /> 下載 JSON 存檔 (.json)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyJSON}
+                      className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-sm shadow flex items-center justify-center gap-2 transition"
+                    >
+                      📋 複製 JSON 數據碼
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <div className="text-xs font-bold text-indigo-400 flex items-center gap-1">
+                      🏆 賽事紀錄文字檔
+                    </div>
+                    <textarea
+                      readOnly
+                      rows="6"
+                      value={JSON.stringify(tournament, null, 2)}
+                      className="w-full bg-slate-900 text-slate-300 font-mono text-xs p-3 rounded-lg border border-slate-800 focus:outline-none"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowExportModal(false)}
+                    className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
+                  >
+                    關閉視窗
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer & Copyright Info */}
+          <footer className="mt-auto py-4 px-4 border-t border-slate-900 bg-slate-950/80 text-center text-xs text-slate-500 space-y-1">
+            <div className="flex items-center justify-center gap-2 md:gap-3 font-medium text-slate-400 flex-wrap">
+              <span className="bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-md text-[11px] text-indigo-400 font-bold">v2.5 Pro</span>
+              <span>•</span>
+              <span>製作：<strong className="text-slate-300">AI練習曲</strong></span>
+              <span>•</span>
+              <span>Updated: <span className="font-mono text-slate-400">2026.08.01</span></span>
+            </div>
+            <div className="text-[11px] text-slate-600 font-medium">
+              🔒 歡迎分享，請勿商用
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
