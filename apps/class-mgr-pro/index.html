@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>互動班級經營與小白板 v11.0 旗艦整合版</title>
+  
+  <!-- 載入 React 18, Babel, 與 Tailwind CSS -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style id="app-styles">
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
+      touch-action: manipulation;
+    }
+    #root {
+      height: 100%;
+      width: 100%;
+    }
+    .custom-scrollbar {
+      overflow-y: auto !important;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+      -webkit-overflow-scrolling: touch;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 8px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .scroll-touch-area {
+      touch-action: pan-y !important;
+      pointer-events: auto !important;
+    }
+    canvas {
+      touch-action: none;
+    }
+    .side-tooltip {
+      position: absolute;
+      left: 52px;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translateX(-5px);
+      transition: all 0.2s ease;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .side-icon-container:hover .side-tooltip {
+      opacity: 1;
+      transform: translateX(5px);
+    }
+    @keyframes dice-shake {
+      0% { transform: rotate(0deg) scale(1); }
+      25% { transform: rotate(10deg) scale(1.1); }
+      50% { transform: rotate(-10deg) scale(1.1); }
+      75% { transform: rotate(5deg) scale(1.05); }
+      100% { transform: rotate(0deg) scale(1); }
+    }
+    .animate-dice {
+      animation: dice-shake 0.3s ease-in-out;
+    }
+    .font-lcd {
+      font-family: 'Courier New', Courier, monospace;
+      letter-spacing: -2px;
+    }
+    .widget-container {
+      touch-action: none;
+      transition: box-shadow 0.2s, border-color 0.2s;
+      will-change: width, height, transform;
+      backface-visibility: hidden;
+    }
+    .btn-setting-highlight {
+      background-color: #2563eb;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.4);
+      transition: all 0.2s;
+    }
+    .btn-setting-highlight:hover {
+      background-color: #1d4ed8;
+      transform: scale(1.05);
+    }
+    .resize-h { position: absolute; right: 0; top: 0; bottom: 15px; width: 10px; cursor: ew-resize; z-index: 50; }
+    .resize-v { position: absolute; bottom: 0; left: 0; right: 15px; height: 10px; cursor: ns-resize; z-index: 50; }
+    .resize-both { position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; z-index: 60; background: rgba(0,0,0,0.05); border-radius: 8px 0 0 0; }
+    .resize-h:hover, .resize-v:hover { background: rgba(59, 130, 246, 0.2); }
+    .resize-both:hover { background: rgba(59, 130, 246, 0.3); }
+    
+    .animate-pop { animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes popIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading-screen" className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white">
+      <div style="border: 4px solid rgba(255,255,255,0.1); width: 44px; height: 44px; border-radius: 50%; border-left-color: #3b82f6; animation: spin 1s linear infinite;"></div>
+      <p style="margin-top: 16px; font-weight: bold; font-size: 15px;">正在載入互動小白板與班級經營系統...</p>
+    </div>
+    <style> @keyframes spin { to { transform: rotate(360deg); } } </style>
+  </div>
+
+  <script type="text/babel">
+    // 阻斷性原生 API 處理機制
+    window.confirm = (msg) => true;
+
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // --- 全域 SVG 圖示庫 ---
+    const icons = {
+      plus: <path d="M12 5v14M5 12h14" />,
+      x: <path d="M18 6L6 18M6 6l12 12" />,
+      palette: <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 8 6.5 8s1.5.67 1.5 1.5S7.33 11 6.5 11zm3-4C8.67 7 8 6.33 8 5.5S8.67 4 9.5 4s1.5.67 1.5 1.5S10.33 7 9.5 7zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 4 14.5 4s1.5.67 1.5 1.5S15.33 7 14.5 7zm4.5 4c-.83 0-1.5-.67-1.5-1.5S18.17 8 19 8s1.5.67 1.5 1.5S19.83 11 19 11z" />,
+      type: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
+      timer: <><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>,
+      hourglass: <><path d="M5 2h14M5 22h14M12 12l7-7H5l7 7zM12 12l-7 7h14l-7-7z"/></>,
+      dices: <><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="8.5" cy="15.5" r="1.5"/><circle cx="15.5" cy="8.5" r="1.5"/></>,
+      layers: <><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></>,
+      star: <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
+      users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+      clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14" /></>,
+      calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+      refresh: <><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
+      eraser: <><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l11-11c1-1 2.5-1 3.4 0l4.3 4.3c1 1 1 2.5 0 3.4l-11 11c-1 1-2.5 1-3.4 0z"/><path d="m5 11 9 9"/></>,
+      download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />,
+      upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />,
+      chevronLeft: <polyline points="15 18 9 12 15 6" />,
+      chevronRight: <polyline points="9 18 15 12 9 6" />,
+      chevronUp: <polyline points="18 15 12 9 6 15" />,
+      chevronDown: <polyline points="6 9 12 15 18 9" />,
+      trash: <><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
+      image: <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h18a2 2 0 0 1 2 2zM8.5 8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM21 15l-5-5L5 21" />,
+      qr: <path d="M3 11V3h8v8H3zm0 10v-8h8v8H3zm10-10V3h8v8h-8zm0 10v-8h8v8h-8zM7 7h1M7 17h1M17 7h1M17 17h1" />,
+      settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />,
+      gallery: <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></>,
+      award: <><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></>,
+      table: <><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18"/></>,
+      database: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></>,
+      pencil: <><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></>,
+      check: <path d="M20 6 9 17l-5-5"/>,
+      save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
+      history: <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></>,
+      layout: <><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></>
+    };
+
+    const IconComp = ({ name, size = 18, className = "", style = {} }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+        {icons[name] || <circle cx="12" cy="12" r="10" />}
+      </svg>
+    );
+
+    // --- 豐富的主題色彩庫 ---
+    const TOOL_THEMES = [
+      { id: 'slate', name: '經典灰', border: '#cbd5e1', header: '#f1f5f9', bg: '#ffffff', text: '#1e293b', accent: '#475569' },
+      { id: 'blue', name: '天空藍', border: '#bae6fd', header: '#f0f9ff', bg: '#ffffff', text: '#0369a1', accent: '#0ea5e9' },
+      { id: 'pink', name: '粉嫩羅', border: '#fbcfe8', header: '#fdf2f8', bg: '#ffffff', text: '#be185d', accent: '#ec4899' },
+      { id: 'green', name: '草地綠', border: '#bbf7d0', header: '#f0fdf4', bg: '#ffffff', text: '#15803d', accent: '#22c55e' },
+      { id: 'orange', name: '夕陽橘', border: '#fed7aa', header: '#fff7ed', bg: '#ffffff', text: '#c2410c', accent: '#f97316' },
+      { id: 'purple', name: '羅蘭紫', border: '#ddd6fe', header: '#f5f3ff', bg: '#ffffff', text: '#6d28d9', accent: '#8b5cf6' },
+      { id: 'teal', name: '湖水綠', border: '#99f6e4', header: '#f0fdfa', bg: '#ffffff', text: '#0f766e', accent: '#14b8a6' },
+      { id: 'red', name: '熱情紅', border: '#fecaca', header: '#fef2f2', bg: '#ffffff', text: '#b91c1c', accent: '#ef4444' },
+      { id: 'yellow', name: '向日葵', border: '#fef08a', header: '#fefce8', bg: '#ffffff', text: '#a16207', accent: '#eab308' },
+      { id: 'cyan', name: '翡翠藍', border: '#a5f3fc', header: '#ecfeff', bg: '#ffffff', text: '#0891b2', accent: '#06b6d4' },
+      { id: 'dark-midnight', name: '午夜藍', border: '#312e81', header: '#1e1b4b', bg: '#1e1b4b', text: '#f1f5f9', accent: '#93c5fd', isDark: true },
+      { id: 'dark-onyx', name: '曜石黑', border: '#44403c', header: '#1c1917', bg: '#1c1917', text: '#ffffff', accent: '#fcd34d', isDark: true },
+      { id: 'dark-forest', name: '深幽綠', border: '#064e3b', header: '#022c22', bg: '#022c22', text: '#ecfdf5', accent: '#6ee7b7', isDark: true },
+      { id: 'dark-wine', name: '勃根地', border: '#881337', header: '#4c0519', bg: '#4c0519', text: '#fff1f2', accent: '#fda4af', isDark: true },
+      { id: 'dark-slate', name: '曜石灰', border: '#334155', header: '#0f172a', bg: '#0f172a', text: '#f8fafc', accent: '#cbd5e1', isDark: true },
+      { id: 'dark-purple', name: '紫夜深', border: '#581c87', header: '#2e1065', bg: '#2e1065', text: '#f5f3ff', accent: '#d8b4fe', isDark: true },
+      { id: 'dark-ocean', name: '深海藍', border: '#1e3a8a', header: '#172554', bg: '#172554', text: '#eff6ff', accent: '#93c5fd', isDark: true },
+      { id: 'dark-choco', name: '咖啡深', border: '#451a03', header: '#271709', bg: '#271709', text: '#fffbeb', accent: '#fde68a', isDark: true },
+      { id: 'dark-lava', name: '熔岩紅', border: '#7f1d1d', header: '#450a0a', bg: '#450a0a', text: '#fef2f2', accent: '#fca5a5', isDark: true },
+      { id: 'dark-mint', name: '薄荷深', border: '#065f46', header: '#022c22', bg: '#022c22', text: '#f0fdf4', accent: '#6ee7b7', isDark: true }
+    ];
+
+    const BG_COLORS = ['#ffffff', '#cbd5e1', '#ef4444', '#22c55e', '#3b82f6', '#eab308', '#0f172a'];
+    const COLORS_DEFAULT = ['#000000', '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ffffff'];
+
+    // --- 音效合成器 (Web Audio API) ---
+    let audioCtx = null;
+    function initAudioContext() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function playAlarmSound() {
+      try {
+        const ctx = initAudioContext();
+        const playBell = (f, sT, d) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.type = 'sine'; o.frequency.setValueAtTime(f, sT);
+          g.gain.setValueAtTime(0, sT); g.gain.linearRampToValueAtTime(0.4, sT + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.01, sT + d);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(sT); o.stop(sT + d);
+        };
+        const now = ctx.currentTime;
+        playBell(880, now, 1.2); playBell(698.46, now + 0.5, 1.2);
+      } catch (e) {}
+    }
+    function playWinSound() {
+      try {
+        const ctx = initAudioContext(); const now = ctx.currentTime;
+        [523.25, 659.25, 783.99].forEach((f, i) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.frequency.setValueAtTime(f, now + i * 0.1);
+          g.gain.setValueAtTime(0.2, now + i * 0.1);
+          g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.1 + 0.3);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(now + i * 0.1); o.stop(now + i * 0.1 + 0.3);
+        });
+      } catch (e) {}
+    }
+
+    const getLocalDateStr = (date) => {
+      const d = date || new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const parseDateStr = (str) => {
+      if (!str) return new Date();
+      const [y, m, d] = str.split('-').map(Number);
+      return new Date(y, m - 1, d || 1);
+    };
+
+    const getToolIcon = (t) => ({
+      lottery:'users', photoLottery:'gallery', score:'award', timer:'timer', pen:'pencil', canvas:'layers', text:'type',
+      dice:'dices', clock:'clock', countdown:'hourglass', calendar:'calendar', timetable:'layout', table:'table', image:'image', qr:'qr'
+    }[t] || 'settings');
+
+    const getToolLabel = (t) => ({
+      lottery:'抽籤助手', photoLottery:'選圖助手', score:'加減分助手', timer:'計時器', pen:'塗鴉小白板', canvas:'畫框', text:'文字筆記',
+      dice:'自訂骰子', clock:'時鐘', countdown:'目標倒數', calendar:'月曆記事', timetable:'週課表', table:'數據表格', image:'圖片展示', qr:'QR碼產生器'
+    }[t] || '小工具');
+
+    // --- 通用確認對話框組件 ---
+    const CustomConfirm = ({ show, title, message, onConfirm, onCancel }) => {
+      if (!show) return null;
+      return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center text-slate-800 animate-pop font-bold">
+            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
+              <IconComp name="trash" size={24} />
+            </div>
+            <h3 className="text-lg font-black mb-1">{title}</h3>
+            <p className="text-xs text-slate-500 mb-6 font-bold">{message}</p>
+            <div className="flex gap-3">
+              <button onClick={onConfirm} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-black shadow active:scale-95 transition">確認刪除</button>
+              <button onClick={onCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold active:scale-95 transition">取消</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- 1. 加減分助手 ---
+    function ScoreKeeperTool({ data, onUpdate, globalConfig, theme }) {
+      const state = useMemo(() => data || { logs: [], currentClassId: globalConfig?.classes?.[0]?.id || null }, [data, globalConfig?.classes]);
+      const [view, setView] = useState('main');
+      const [selectedStudent, setSelectedStudent] = useState(null);
+      const [confirmClear, setConfirmClear] = useState(false);
+
+      const currentClass = useMemo(() => (globalConfig?.classes || []).find(c => c.id === state.currentClassId) || globalConfig?.classes?.[0], [globalConfig?.classes, state.currentClassId]);
+      const updateState = (updates) => onUpdate({ data: { ...state, ...updates } });
+
+      return (
+        <div className="h-full flex flex-col no-drag text-xs font-bold overflow-hidden relative">
+          <div className="flex gap-1 p-1 bg-black/5 border-b border-black/5 flex-shrink-0 items-center">
+            <button onClick={() => setView('main')} className={`p-1.5 rounded-lg flex items-center gap-1 transition ${view === 'main' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>
+              <IconComp name="plus" size={12} />評分
+            </button>
+            <button onClick={() => setView('logs')} className={`p-1.5 rounded-lg flex items-center gap-1 transition ${view === 'logs' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>
+              <IconComp name="history" size={12} />紀錄 ({(state.logs || []).length})
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden p-2">
+            {!globalConfig?.classes?.length ? (
+              <div className="h-full flex items-center justify-center text-center opacity-50 p-4">請先至側邊欄「資料庫」建立班級名單</div>
+            ) : view === 'main' ? (
+              <div className="h-full flex gap-2 overflow-hidden">
+                <div className="w-1/3 flex flex-col border-r border-slate-200/50 pr-2">
+                  <select value={state.currentClassId || ""} onChange={e => updateState({ currentClassId: Number(e.target.value) })} className="w-full bg-white border rounded-lg p-1.5 mb-2 outline-none font-bold text-slate-800 text-xs">
+                    {globalConfig.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                    {currentClass?.students?.map(s => (
+                      <button key={s.id} onClick={() => setSelectedStudent(s)} className={`w-full text-left p-2 rounded-xl border transition-all truncate ${selectedStudent?.id === s.id ? 'bg-blue-600 text-white shadow-md font-black' : 'bg-white/50 text-slate-700 hover:bg-white'}`}>
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1 flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1 justify-center">
+                  {selectedStudent ? (globalConfig?.rules || []).map((r, i) => (
+                    <button key={i} onClick={() => updateState({ logs: [{ id: Date.now(), d: getLocalDateStr(), t: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), s: selectedStudent.name, i: r.label, sc: r.score }, ...(state.logs || [])] })} className="flex items-center justify-between p-2.5 bg-white/70 hover:bg-white rounded-xl border border-slate-200/50 text-slate-800 shadow-sm transition-all active:scale-95">
+                      <div className="flex items-center gap-2"><span className="text-base">{r.icon}</span><span>{r.label}</span></div>
+                      <span className={`font-black ${r.score > 0 ? 'text-green-600' : 'text-red-500'}`}>{r.score > 0 ? '+' : ''}{r.score}</span>
+                    </button>
+                  )) : <div className="text-center opacity-40 font-bold py-8">點選左側學生</div>}
+                </div>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <span className="font-black text-slate-600">評分報表</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => {
+                      const csv = "\ufeff日期,時間,姓名,項目,分數\n" + (state.logs || []).map(l => `${l.d},${l.t},${l.s},${l.i},${l.sc}`).join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `評分紀錄_${getLocalDateStr()}.csv`; link.click();
+                    }} className="bg-emerald-600 text-white px-2 py-1 rounded-lg shadow flex items-center gap-1 font-bold text-[10px]"><IconComp name="download" size={12} /> CSV</button>
+                    <button onClick={() => setConfirmClear(true)} className="bg-red-500 text-white px-2 py-1 rounded-lg shadow font-bold text-[10px]">清空</button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                  {!state.logs?.length ? <div className="text-center py-10 opacity-30">目前無紀錄</div> : state.logs.map(l => (
+                    <div key={l.id} className="flex justify-between bg-white/80 p-2 rounded-xl border border-slate-100 items-center text-slate-700 shadow-sm">
+                      <div className="truncate flex-1"><b>{l.s}</b>: {l.i} (<span className={l.sc > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{l.sc > 0 ? '+' : ''}{l.sc}</span>)</div>
+                      <span className="opacity-40 font-mono text-[9px] ml-2">{l.t}</span>
+                      <button onClick={() => updateState({ logs: state.logs.filter(x => x.id !== l.id) })} className="text-red-400 hover:text-red-600 ml-2 font-bold">×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <CustomConfirm show={confirmClear} title="清空紀錄？" message="確定要刪除此班級的所有評分記錄？" onConfirm={() => { updateState({ logs: [] }); setConfirmClear(false); }} onCancel={() => setConfirmClear(false)} />
+        </div>
+      );
+    }
+
+    // --- 2. 時鐘工具 ---
+    function ClockTool({ data, onUpdate, theme, width, height }) {
+      const [now, setNow] = useState(new Date());
+      const [isSetting, setIsSetting] = useState(false);
+      const style = data.style || 'digital';
+      useEffect(() => { const itv = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(itv); }, []);
+      const s = Math.min(width / 350, height / 300);
+      const timeStr = now.toLocaleTimeString([], { hour12: false });
+      const [hh, mm, ss] = timeStr.split(':');
+      const romanMap = ["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"];
+
+      if (isSetting) return (
+        <div className="flex flex-col h-full bg-white p-3 text-xs no-drag overflow-auto custom-scrollbar font-bold text-slate-800">
+          <div className="font-black text-blue-600 border-b pb-1 mb-2 text-center">時鐘樣式選擇</div>
+          <div className="grid grid-cols-2 gap-2 p-1">
+            {['digital', 'analog', 'minimal', 'lcd', 'vertical', 'roman'].map(st => (
+              <button key={st} onClick={() => { onUpdate({ data: { ...data, style: st } }); setIsSetting(false); }} className={`p-2 border rounded-xl transition-all ${style === st ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-600'}`}>
+                {st === 'digital' ? '經典數字' : st === 'analog' ? '圓形指針' : st === 'minimal' ? '極簡無框' : st === 'lcd' ? '復古 LCD' : st === 'vertical' ? '縱向堆疊' : '羅馬數字'}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setIsSetting(false)} className="mt-auto w-full py-2 bg-slate-800 text-white rounded-xl font-black">完成</button>
+        </div>
+      );
+
+      return (
+        <div className="flex flex-col h-full relative group/clock font-bold" style={{ color: theme.text }}>
+          <div className="flex-grow flex items-center justify-center overflow-hidden">
+            {style === 'digital' && <div className="font-black tracking-tight" style={{ fontSize: `${55 * s}px` }}>{timeStr}</div>}
+            {style === 'minimal' && <div className="font-light tracking-widest" style={{ fontSize: `${70 * s}px` }}>{hh}<span className="animate-pulse">:</span>{mm}</div>}
+            {style === 'vertical' && <div className="flex flex-col leading-none font-black text-center" style={{ fontSize: `${90 * s}px` }}><span>{hh}</span><span className="text-[0.3em] opacity-30">---</span><span>{mm}</span></div>}
+            {style === 'lcd' && <div className="font-lcd bg-green-100/30 p-4 rounded-xl border-2 border-green-200/50 shadow-inner" style={{ fontSize: `${48 * s}px`, color: theme.isDark ? '#ecfdf5' : '#065f46' }}>{timeStr}</div>}
+            {(style === 'analog' || style === 'roman') && (
+              <div className="relative rounded-full border-4 shadow-inner bg-white flex items-center justify-center" style={{ width: `${160 * s}px`, height: `${160 * s}px`, borderColor: theme.accent }}>
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="absolute inset-1 text-[10px] font-bold flex flex-col items-center" style={{ transform: `rotate(${i * 30}deg)`, color: (style === 'roman' || i % 3 === 0) ? theme.accent : '#94a3b8' }}>
+                    <span style={{ transform: `rotate(${-i * 30}deg)` }}>{style === 'roman' ? romanMap[i] : (i === 0 ? 12 : i)}</span>
+                  </div>
+                ))}
+                <div className="absolute w-1.5 h-1/4 bg-slate-800 origin-bottom bottom-1/2 rounded-full" style={{ transform: `rotate(${(now.getHours() % 12 + now.getMinutes() / 60) * 30}deg)` }} />
+                <div className="absolute w-1 h-1/3 bg-slate-600 origin-bottom bottom-1/2 rounded-full" style={{ transform: `rotate(${now.getMinutes() * 6}deg)` }} />
+                <div className="absolute w-[1px] h-[42%] bg-red-500 origin-bottom bottom-1/2" style={{ transform: `rotate(${now.getSeconds() * 6}deg)` }} />
+                <div className="w-3 h-3 bg-slate-800 rounded-full z-10 border-2 border-white" />
+              </div>
+            )}
+          </div>
+          <button onClick={() => setIsSetting(true)} className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full opacity-0 group-hover/clock:opacity-100 transition-opacity btn-setting-highlight no-drag shadow-lg">
+            <IconComp name="settings" size={14} />
+          </button>
+        </div>
+      );
+    }
+
+    // --- 3. 圖片選圖助手 ---
+    function PhotoLottery({ data, onUpdate, width, height, theme }) {
+      const [viewMode, setViewMode] = useState('result');
+      const [showMgr, setShowMgr] = useState('input');
+      const [isRolling, setIsRolling] = useState(false);
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [rollingImg, setRollingImg] = useState([]);
+      const fileRef = useRef(null);
+
+      // 圖片壓縮輔助函式（防止超大圖檔造成 LocalStorage 與 State 記憶體崩潰）
+      const compressImage = (file) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const maxDim = 800;
+              let w = img.width, h = img.height;
+              if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                else { w = Math.round((w * maxDim) / h); h = maxDim; }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w; canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              // 判斷是否為透明圖檔格式 (PNG, WebP, GIF, SVG)，是則導出為 PNG 以保留透明背景
+              const isTransparent = file.type && (file.type.includes('png') || file.type.includes('webp') || file.type.includes('gif') || file.type.includes('svg'));
+              const mimeType = isTransparent ? 'image/png' : 'image/jpeg';
+              resolve(canvas.toDataURL(mimeType, 0.8));
+            };
+            img.onerror = () => resolve(e.target.result);
+            img.src = e.target.result;
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      // 載入本地圖片或資料夾並轉換為優化後的 Base64 以供持久化保存
+      const handleLocalFolder = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        setIsProcessing(true);
+
+        try {
+          let folderPath = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : "自訂圖片包";
+          const imageFiles = files.filter(f => f.type.startsWith('image/'));
+          if (!imageFiles.length) {
+            setIsProcessing(false);
+            return;
+          }
+
+          const loaded = [];
+          for (let i = 0; i < imageFiles.length; i++) {
+            const f = imageFiles[i];
+            const compressedUrl = await compressImage(f);
+            if (compressedUrl) {
+              loaded.push({ id: f.name + '_' + f.size + '_' + i, name: f.name, url: compressedUrl });
+            }
+          }
+
+          if (loaded.length > 0) {
+            const allIds = loaded.map(img => img.id);
+            onUpdate({
+              data: {
+                ...data,
+                photoList: loaded,
+                folderPath: folderPath,
+                selectedPhotos: allIds,
+                winners: [],
+                currentPicked: null
+              }
+            });
+          }
+        } catch (err) {
+          console.error("載入圖片失敗:", err);
+        } finally {
+          setIsProcessing(false);
+          if (fileRef.current) fileRef.current.value = "";
+        }
+      };
+
+      // 取得勾選且符合資格的圖片池
+      const selectedIds = data.selectedPhotos || (data.photoList || []).map(p => p.id);
+      const pool = (data.photoList || []).filter(i => selectedIds.includes(i.id) && (!data.exclude || !(data.winners || []).includes(i.id)));
+
+      const handleDraw = () => {
+        if (!pool.length) return;
+        setIsRolling(true); setViewMode('result');
+        let cnt = 0;
+        const itv = setInterval(() => {
+          const temps = [];
+          const count = data.count || 1;
+          for (let i = 0; i < count; i++) temps.push(pool[Math.floor(Math.random() * pool.length)]);
+          setRollingImg(temps); cnt++;
+          if (cnt >= 18) {
+            clearInterval(itv);
+            const final = []; const tP = [...pool];
+            for (let i = 0; i < Math.min(data.count || 1, tP.length); i++) final.push(tP.splice(Math.floor(Math.random() * tP.length), 1)[0]);
+            playWinSound();
+            onUpdate({ data: { ...data, currentPicked: final, winners: [...(data.winners || []), ...final.map(f => f.id)] } });
+            setIsRolling(false);
+          }
+        }, 100);
+      };
+
+      const toggleSelectPhoto = (id) => {
+        const current = data.selectedPhotos || (data.photoList || []).map(p => p.id);
+        const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
+        onUpdate({ data: { ...data, selectedPhotos: next } });
+      };
+
+      const selectAllPhotos = () => {
+        onUpdate({ data: { ...data, selectedPhotos: (data.photoList || []).map(p => p.id) } });
+      };
+
+      const deselectAllPhotos = () => {
+        onUpdate({ data: { ...data, selectedPhotos: [] } });
+      };
+
+      const handleReset = () => onUpdate({ data: { ...data, winners: [], currentPicked: null } });
+      const displayItems = (isRolling ? rollingImg : (data.currentPicked || [])).filter(Boolean);
+      const gridCols = (width > height * 1.05) ? (displayItems.length <= 3 ? displayItems.length : 3) : (displayItems.length <= 2 ? 1 : 2);
+      const rowHeight = (height - 130) / Math.ceil(displayItems.length / (gridCols || 1) || 1);
+
+      if (viewMode === 'result') return (
+        <div className="flex flex-col h-full relative overflow-hidden font-bold">
+          <div className="flex justify-between px-3 py-1 text-[10px] opacity-70 bg-black/5 rounded-t-lg">
+            <span>待選圖片：{pool.length} 張</span>
+            <span>已選總數：{(data.winners || []).length} 張</span>
+          </div>
+          <div className="flex-grow grid gap-2 p-2 content-center place-items-center no-drag overflow-auto custom-scrollbar" style={{ gridTemplateColumns: `repeat(${gridCols || 1}, 1fr)` }}>
+            {displayItems.length > 0 ? displayItems.map((img, idx) => (
+              <div key={idx} className="w-full rounded-2xl overflow-hidden shadow-md border bg-slate-50 flex items-center justify-center transition-all" style={{ height: `${rowHeight}px` }}>
+                <img src={img.url} className="w-full h-full object-contain" />
+              </div>
+            )) : <div className="text-slate-300 italic font-bold">點擊開始選圖</div>}
+          </div>
+          <div className="flex items-center gap-2 border-t p-2 bg-slate-50">
+            <button onClick={handleDraw} disabled={isRolling || !pool.length} className="flex-grow bg-blue-600 text-white font-black py-2.5 rounded-xl shadow active:scale-95 text-base disabled:opacity-50">開始選圖</button>
+            <button onClick={handleReset} className="p-2.5 bg-orange-100 text-orange-600 rounded-xl font-bold hover:bg-orange-200 border border-orange-200 shadow-sm">重來</button>
+            <button onClick={() => !isRolling && setViewMode('edit')} className="btn-setting-highlight p-2.5 rounded-xl shadow-md"><IconComp name="settings" size={18} /></button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="flex flex-col h-full gap-2 bg-white p-2 text-xs no-drag overflow-hidden font-bold text-slate-800">
+          <div className="flex bg-slate-100 p-1 rounded-xl flex-shrink-0">
+            {['input', 'select', 'history'].map(m => (
+              <button key={m} onClick={() => setShowMgr(m)} className={`flex-1 py-1 rounded-lg ${showMgr === m ? 'bg-white shadow text-blue-600 font-black' : 'text-slate-500'}`}>
+                {m === 'input' ? '載入' : m === 'select' ? '挑選' : '歷史'}
+              </button>
+            ))}
+          </div>
+          <div className="flex-grow overflow-auto custom-scrollbar p-1">
+            {showMgr === 'input' ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5 p-3 bg-blue-50/70 rounded-xl border border-dashed border-blue-200">
+                  <span className="font-black text-blue-700 text-xs">載入圖片資料夾</span>
+                  <button onClick={() => fileRef.current && fileRef.current.click()} disabled={isProcessing} className="w-full bg-white border-2 border-blue-200 text-blue-600 py-2 rounded-xl font-black shadow-sm hover:bg-blue-50 disabled:opacity-50">
+                    {isProcessing ? "正在讀取與處理圖片中..." : "選擇資料夾 / 多張圖片"}
+                  </button>
+                  <input type="file" ref={fileRef} className="hidden" webkitdirectory="true" directory="true" multiple onChange={handleLocalFolder} />
+                  {data.folderPath && (
+                    <div className="text-[10px] text-green-600 font-black truncate">
+                      已載入資料夾：{data.folderPath} (共 {data.photoList?.length || 0} 張圖片)
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-xl border font-bold">
+                  <span>一次抽出張數</span>
+                  <input type="number" min="1" className="w-14 border rounded p-1 text-center font-black bg-white" value={data.count || 1} onChange={e => onUpdate({ data: { ...data, count: parseInt(e.target.value) || 1 } })} />
+                </div>
+                <label className="flex items-center justify-between bg-slate-100 p-2.5 rounded-xl border font-bold cursor-pointer">
+                  <span>允許重複抽取</span>
+                  <input type="checkbox" checked={!data.exclude} onChange={e => onUpdate({ data: { ...data, exclude: !e.target.checked } })} className="w-4 h-4 text-blue-600 rounded" />
+                </label>
+              </div>
+            ) : showMgr === 'select' ? (
+              <div className="flex flex-col h-full gap-2">
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-[11px] text-slate-500 font-bold">勾選參與抽取的圖片：</span>
+                  <div className="flex gap-2">
+                    <button onClick={selectAllPhotos} className="text-blue-600 underline">全選</button>
+                    <button onClick={deselectAllPhotos} className="text-slate-500 underline">取消全選</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 overflow-y-auto custom-scrollbar p-1 max-h-[220px]">
+                  {(data.photoList || []).map((img) => {
+                    const isChecked = selectedIds.includes(img.id);
+                    return (
+                      <div key={img.id} onClick={() => toggleSelectPhoto(img.id)} className={`relative rounded-xl border-2 overflow-hidden cursor-pointer h-20 bg-slate-50 flex items-center justify-center transition-all ${isChecked ? 'border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 opacity-50'}`}>
+                        <img src={img.url} className="w-full h-full object-contain" />
+                        <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow">
+                          <input type="checkbox" checked={isChecked} readOnly className="w-3.5 h-3.5 pointer-events-none" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(data.photoList || []).filter(p => (data.winners || []).includes(p.id)).map(p => (
+                  <div key={p.id} className="w-14 h-14 rounded-lg border overflow-hidden bg-slate-50 shadow-sm"><img src={p.url} className="w-full h-full object-contain" /></div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => setViewMode('result')} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-black shadow-md">完成設定</button>
+        </div>
+      );
+    }
+
+    // --- 4. 抽籤助手 ---
+    function LotteryTool({ data, onUpdate, savedLists, onSaveList, onDeleteList, width, height, theme, globalConfig }) {
+      const [viewMode, setViewMode] = useState('result');
+      const [showMgr, setShowMgr] = useState('input');
+      const [isRolling, setIsRolling] = useState(false);
+      const [rollingNames, setRollingNames] = useState([]);
+      const [isNaming, setIsNaming] = useState(false);
+      const [tempName, setTempName] = useState("");
+
+      const parsedItems = useMemo(() => (data.list || "").split(/[\n\r]+/).map(s => s.trim()).filter(s => s), [data.list]);
+      const pool = useMemo(() => (data.selectedItems || []).filter(i => !data.exclude || !(data.winners || []).includes(i)), [data.selectedItems, data.winners, data.exclude]);
+
+      const handleDraw = () => {
+        if (!pool.length) return;
+        setIsRolling(true); setViewMode('result');
+        let cnt = 0;
+        const itv = setInterval(() => {
+          const temps = [];
+          for (let i = 0; i < (data.count || 1); i++) temps.push(pool[Math.floor(Math.random() * pool.length)]);
+          setRollingNames(temps); cnt++;
+          if (cnt >= 18) {
+            clearInterval(itv);
+            const final = []; const tP = [...pool];
+            for (let i = 0; i < Math.min(data.count || 1, tP.length); i++) final.push(tP.splice(Math.floor(Math.random() * tP.length), 1)[0]);
+            playWinSound();
+            onUpdate({ data: { ...data, currentPicked: final, winners: [...(data.winners || []), ...final] } });
+            setIsRolling(false);
+          }
+        }, 100);
+      };
+
+      const removeWinner = (targetName) => onUpdate({ data: { ...data, winners: (data.winners || []).filter(name => name !== targetName) } });
+      const handleReset = () => onUpdate({ data: { ...data, winners: [], currentPicked: null } });
+
+      const displayItems = isRolling ? rollingNames : (data.currentPicked || []);
+      const maxCols = (width > height * 1.05) ? 3 : 2;
+      const currentCols = displayItems.length > 0 ? Math.min(displayItems.length, maxCols) : 1;
+      const rowH = (height - 150) / Math.ceil(displayItems.length / currentCols || 1);
+
+      if (viewMode === 'result') {
+        return (
+          <div className="flex flex-col h-full relative overflow-hidden font-bold" style={{ color: theme.text }}>
+            <div className="flex justify-between px-3 py-1 text-[10px] opacity-70 bg-black/5 rounded-t-lg">
+              <span>待抽：{pool.length} 人</span>
+              <span>已抽：{(data.winners || []).length} 人</span>
+            </div>
+            <div className="flex-grow grid gap-2 p-2 overflow-y-auto custom-scrollbar no-drag content-center justify-items-center" style={{ gridTemplateColumns: `repeat(${currentCols}, 1fr)` }}>
+              {displayItems.length > 0 ? displayItems.map((name, idx) => (
+                <div key={idx} className="flex items-center justify-center text-center p-3 rounded-2xl shadow-sm border border-black/5 w-full transition-all" style={{ height: `${rowH}px`, backgroundColor: theme.header, color: theme.text, maxWidth: currentCols === 1 ? '85%' : '100%' }}>
+                  <div className="font-black leading-tight whitespace-pre-line overflow-hidden break-all px-1" style={{ fontSize: `${Math.min(rowH * 0.35, (width / currentCols) * 0.22)}px` }}>
+                    {name.replace(/[ \t]+/g, '\n')}
+                  </div>
+                </div>
+              )) : (
+                <div className="flex flex-col items-center gap-2 text-slate-300 py-8">
+                  <IconComp name="users" size={40} className="opacity-20" />
+                  <div className="italic text-xs">請進入設定勾選或輸入名單</div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 border-t p-2 bg-slate-50">
+              <button onClick={handleDraw} disabled={isRolling} style={{ backgroundColor: isRolling ? '#94a3b8' : theme.accent }} className="flex-grow text-white font-black py-2.5 rounded-xl shadow active:scale-95 text-base">開始抽籤</button>
+              <button onClick={handleReset} className="p-2.5 bg-orange-100 text-orange-600 rounded-xl font-bold border border-orange-200 shadow-sm text-xs">重來</button>
+              <button onClick={() => !isRolling && setViewMode('edit')} className="btn-setting-highlight p-2.5 rounded-xl shadow-md"><IconComp name="settings" size={18} /></button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col h-full gap-2 bg-white p-2 text-xs overflow-hidden font-bold text-slate-800">
+          <div className="flex bg-slate-100 p-1 rounded-xl flex-shrink-0">
+            {['名單', '挑選', '歷史', '存檔'].map((l, i) => {
+              const ms = ['input', 'select', 'history', 'cloud'];
+              return <button key={l} onClick={() => setShowMgr(ms[i])} className={`flex-1 py-1 rounded-lg ${showMgr === ms[i] ? 'bg-white shadow text-blue-600 font-black' : 'text-slate-500'}`}>{l}</button>;
+            })}
+          </div>
+          <div className="flex-grow overflow-hidden">
+            {showMgr === 'input' && (
+              <div className="flex flex-col h-full gap-1.5">
+                {globalConfig?.classes?.length > 0 && (
+                  <div className="flex items-center gap-2 p-1.5 bg-blue-50/80 rounded-xl border border-blue-200 flex-shrink-0">
+                    <span className="text-[11px] font-black text-blue-700 whitespace-nowrap">從資料庫載入班級：</span>
+                    <select
+                      className="flex-1 bg-white border border-blue-300 rounded-lg p-1 font-bold text-xs outline-none text-slate-800"
+                      value={data.selectedClassId || ""}
+                      onChange={(e) => {
+                        const clsId = Number(e.target.value);
+                        const cls = globalConfig.classes.find(c => c.id === clsId);
+                        if (cls) {
+                          const names = (cls.students || []).map(s => s.name);
+                          onUpdate({
+                            data: {
+                              ...data,
+                              selectedClassId: clsId,
+                              list: names.join('\n'),
+                              selectedItems: names
+                            }
+                          });
+                        }
+                      }}
+                    >
+                      <option value="" disabled>-- 選擇班級 --</option>
+                      {globalConfig.classes.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.students?.length || 0}人)</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <textarea className="flex-grow border rounded-xl p-2 text-xs resize-none outline-none focus:ring-2 focus:ring-blue-400 font-bold" value={data.list || ""} onChange={e => onUpdate({ data: { ...data, list: e.target.value } })} placeholder="每列輸入一個名字，或從上方下拉選單載入班級..." />
+                <button onClick={() => setIsNaming(true)} className="text-[10px] text-blue-600 py-0.5 text-right font-black hover:underline flex-shrink-0">儲存此名單至本機</button>
+                {isNaming && (
+                  <div className="p-2 border rounded-xl bg-blue-50 mt-1 flex gap-1 flex-shrink-0">
+                    <input className="flex-grow border rounded-lg px-2 text-slate-800 bg-white font-bold text-xs" value={tempName} onChange={e => setTempName(e.target.value)} placeholder="輸入名稱" />
+                    <button onClick={() => { if (!tempName) return; onSaveList(tempName, data.list); setIsNaming(false); setTempName(""); }} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-black">存</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {showMgr === 'select' && (
+              <div className="flex flex-col h-full">
+                <div className="flex gap-3 mb-1 flex-shrink-0 font-bold">
+                  <button onClick={() => onUpdate({ data: { ...data, selectedItems: parsedItems } })} className="text-blue-600 underline">全選</button>
+                  <button onClick={() => onUpdate({ data: { ...data, selectedItems: [] } })} className="text-slate-500 underline">取消全選</button>
+                </div>
+                <div className="flex-grow overflow-y-auto custom-scrollbar border rounded-xl p-1">
+                  {parsedItems.map((item, idx) => (
+                    <label key={idx} className="flex items-center gap-2 text-xs p-1.5 border-b last:border-0 hover:bg-slate-50 cursor-pointer">
+                      <input type="checkbox" checked={(data.selectedItems || []).includes(item)} onChange={() => onUpdate({ data: { ...data, selectedItems: (data.selectedItems || []).includes(item) ? (data.selectedItems || []).filter(i => i !== item) : [...(data.selectedItems || []), item] } })} />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {showMgr === 'history' && (
+              <div className="flex flex-col h-full">
+                <div className="font-bold border-b pb-1 mb-1 text-blue-600 flex justify-between items-center">
+                  <span>中籤紀錄：</span>
+                  <button onClick={() => onUpdate({ data: { ...data, winners: [] } })} className="text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded font-bold">清空</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 overflow-y-auto custom-scrollbar flex-grow p-1">
+                  {(data.winners || []).map((name, i) => (
+                    <div key={i} className="bg-white border rounded-lg px-2 py-1 text-[11px] shadow-sm flex items-center gap-1">
+                      <span>{name}</span>
+                      <button onClick={() => removeWinner(name)} className="text-red-400 hover:text-red-600 ml-1 font-black">×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {showMgr === 'cloud' && (
+              <div className="flex flex-col h-full overflow-y-auto custom-scrollbar border rounded-xl p-1">
+                {(savedLists || []).map(l => (
+                  <div key={l.id} className="flex items-center justify-between p-2 border-b text-xs text-slate-700 font-bold">
+                    <span>{l.name}</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => onUpdate({ data: { ...data, list: l.content, selectedItems: l.content.split(/[\n\r]+/).map(s => s.trim()).filter(s => s) } })} className="text-blue-600 px-2 font-black">載入</button>
+                      <button onClick={() => onDeleteList(l.id)} className="text-red-400 p-1"><IconComp name="trash" size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center bg-slate-100 p-2 rounded-xl border flex-shrink-0">
+            <span className="font-bold text-xs">抽取人數</span>
+            <input type="number" min="1" className="w-14 border rounded p-1 text-center font-black bg-white" value={data.count || 1} onChange={e => onUpdate({ data: { ...data, count: parseInt(e.target.value) || 1 } })} />
+          </div>
+          <label className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border flex-shrink-0 font-bold cursor-pointer">
+            <span className="text-xs">允許重複抽取</span>
+            <input type="checkbox" checked={!data.exclude} onChange={e => onUpdate({ data: { ...data, exclude: !e.target.checked } })} className="w-4 h-4 text-blue-600 rounded" />
+          </label>
+          <button onClick={() => setViewMode('result')} style={{ backgroundColor: theme.accent }} className="w-full text-white py-2.5 rounded-xl font-black shadow-md">完成設定</button>
+        </div>
+      );
+    }
+
+    // --- 5. 計時器與碼錶 ---
+    function TimerWidget({ data, onUpdate, width, height, theme }) {
+      const state = data || { time: 60, mode: 'timer', status: 'idle' };
+      const [left, setLeft] = useState(state.time);
+
+      useEffect(() => { if (state.status === 'idle' && state.mode === 'timer') setLeft(state.time); }, [state.time, state.status, state.mode]);
+
+      useEffect(() => {
+        let it;
+        if (state.status === 'running') {
+          it = setInterval(() => {
+            setLeft(l => {
+              if (state.mode === 'stopwatch') return l + 1;
+              if (l <= 1) {
+                onUpdate({ data: { ...state, status: 'idle' } });
+                playAlarmSound();
+                return 0;
+              }
+              return l - 1;
+            });
+          }, 1000);
+        }
+        return () => clearInterval(it);
+      }, [state.status, state.mode, onUpdate, state]);
+
+      const s = Math.min(width / 350, height / 300);
+
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 font-bold text-slate-800 no-drag">
+          <div className="flex gap-1 bg-black/5 p-1 rounded-full text-xs">
+            <button onClick={() => onUpdate({ data: { ...state, mode: 'timer', time: 60, status: 'idle' } })} className={`px-4 py-1 rounded-full ${state.mode === 'timer' ? 'bg-white shadow text-blue-600 font-black' : 'text-slate-500'}`}>倒數計時</button>
+            <button onClick={() => { setLeft(0); onUpdate({ data: { ...state, mode: 'stopwatch', status: 'idle' } }); }} className={`px-4 py-1 rounded-full ${state.mode === 'stopwatch' ? 'bg-white shadow text-blue-600 font-black' : 'text-slate-500'}`}>碼錶</button>
+          </div>
+          <div className="flex items-center font-mono font-black" style={{ fontSize: `${75 * s}px`, color: theme.text }}>
+            {state.mode === 'timer' && state.status === 'idle' ? (
+              <div className="flex items-center gap-1">
+                <input className="w-[1.2em] text-center border-b-2 border-slate-400 outline-none rounded bg-transparent" style={{ color: theme.text }} value={Math.floor(state.time / 60)} onChange={e => onUpdate({ data: { ...state, time: Math.max(1, (parseInt(e.target.value) || 0) * 60 + (state.time % 60)) } })} />
+                <span className="opacity-30">:</span>
+                <input className="w-[1.2em] text-center border-b-2 border-slate-400 outline-none rounded bg-transparent" style={{ color: theme.text }} value={String(state.time % 60).padStart(2, '0')} onChange={e => onUpdate({ data: { ...state, time: Math.max(1, Math.floor(state.time / 60) * 60 + (parseInt(e.target.value) || 0)) } })} />
+              </div>
+            ) : (
+              <span>{Math.floor(left / 60).toString().padStart(2, '0')}:{(left % 60).toString().padStart(2, '0')}</span>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => { initAudioContext(); onUpdate({ data: { ...state, status: state.status === 'running' ? 'idle' : 'running' } }); }} style={{ backgroundColor: theme.accent }} className="px-7 py-2 rounded-full font-black text-white shadow-md active:scale-95 text-xs">
+              {state.status === 'running' ? '暫停' : '開始'}
+            </button>
+            <button onClick={() => { setLeft(state.mode === 'stopwatch' ? 0 : state.time); onUpdate({ data: { ...state, status: 'idle' } }); }} className="px-7 py-2 bg-slate-200 text-slate-700 rounded-full font-bold shadow-sm hover:bg-slate-300 text-xs">
+              重設
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 6. 自訂骰子 ---
+    function DiceTool({ data, onUpdate, width, height, theme }) {
+      const [isSet, setIsSet] = useState(false);
+      const [isShaking, setIsShaking] = useState(false);
+      const configs = data.configs || [{ type: 'dots', custom: '' }];
+
+      const handleRoll = () => {
+        setIsShaking(true);
+        setTimeout(() => {
+          const res = configs.map(c => {
+            if (c.type === 'dots') return Math.floor(Math.random() * 6) + 1;
+            if (c.type === 'num') return Math.floor(Math.random() * 10);
+            if (c.type === 'custom') {
+              const o = (c.custom || "").split(/[; \n]+/).filter(s => s.trim());
+              return o.length > 0 ? o[Math.floor(Math.random() * o.length)] : '?';
+            }
+            return '?';
+          });
+          playWinSound();
+          onUpdate({ data: { ...data, results: res } });
+          setIsShaking(false);
+        }, 300);
+      };
+
+      const dotMap = { 1:[4], 2:[0,8], 3:[0,4,8], 4:[0,2,6,8], 5:[0,2,4,6,8], 6:[0,3,6,2,5,8] };
+
+      // 動態根據畫框寬高計算骰子尺寸，隨圖框調整
+      const count = configs.length;
+      const availW = Math.max(100, width - 32);
+      const availH = Math.max(100, height - 70);
+      const cols = count === 1 ? 1 : (count <= 4 ? Math.min(count, 2) : 3);
+      const rows = Math.ceil(count / cols);
+      const maxW = (availW - (cols - 1) * 12) / cols;
+      const maxH = (availH - (rows - 1) * 12) / rows;
+      const diceSize = Math.max(40, Math.min(220, Math.min(maxW, maxH)));
+
+      if (isSet) return (
+        <div className="flex flex-col h-full bg-white p-2 text-xs overflow-auto custom-scrollbar no-drag font-bold text-slate-800">
+          <div className="font-black border-b pb-1 flex justify-between text-blue-600">
+            <span>自訂骰子設定</span>
+            <button onClick={() => onUpdate({ data: { ...data, configs: [...configs, { type: 'dots', custom: '' }] } })} className="text-blue-600 font-black">+ 新增</button>
+          </div>
+          <div className="flex-grow space-y-2 p-1">
+            {configs.map((cfg, i) => (
+              <div key={i} className="p-2 border rounded-xl bg-slate-50 flex flex-col gap-1 shadow-sm">
+                <div className="flex justify-between font-bold"><span style={{ color: theme.accent }}>骰子 #{i + 1}</span><button onClick={() => onUpdate({ data: { ...data, configs: configs.filter((_, idx) => idx !== i) } })} className="text-red-400">刪除</button></div>
+                <select value={cfg.type} onChange={e => onUpdate({ data: { ...data, configs: configs.map((c, idx) => idx === i ? { ...c, type: e.target.value } : c) } })} className="border rounded-lg p-1 font-bold">
+                  <option value="dots">標準點數 (1-6)</option>
+                  <option value="num">單一數字 (0-9)</option>
+                  <option value="custom">自訂文字列表</option>
+                </select>
+                {cfg.type === 'custom' && <input value={cfg.custom} onChange={e => onUpdate({ data: { ...data, configs: configs.map((c, idx) => idx === i ? { ...c, custom: e.target.value } : c) } })} className="border rounded-lg p-1 font-bold" placeholder="用分號隔開" />}
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setIsSet(false)} style={{ backgroundColor: theme.accent }} className="text-white py-2 rounded-xl font-black shadow-md mt-auto">完成</button>
+        </div>
+      );
+
+      return (
+        <div className="flex flex-col h-full font-bold">
+          <div className={`flex-grow flex items-center justify-center gap-3 p-2 overflow-auto no-drag ${isShaking ? 'animate-dice' : ''}`}>
+            {configs.map((cfg, i) => {
+              const r = (data.results || [])[i] || 1;
+              const borderW = Math.max(2, Math.round(diceSize * 0.05));
+              const dotSize = Math.max(4, Math.round(diceSize * 0.14));
+              const fontSize = Math.max(12, Math.round(diceSize * 0.38));
+              return (
+                <div key={i} className="bg-white border rounded-2xl shadow-xl flex items-center justify-center transition-all font-black text-slate-800" style={{ width: `${diceSize}px`, height: `${diceSize}px`, borderWidth: `${borderW}px`, borderColor: theme.accent }}>
+                  {cfg.type === 'dots' ? (
+                    <div className="grid grid-cols-3 grid-rows-3 gap-1" style={{ width: `${diceSize * 0.65}px`, height: `${diceSize * 0.65}px` }}>
+                      {[...Array(9)].map((_, di) => <div key={di} className="rounded-full transition-all" style={{ width: `${dotSize}px`, height: `${dotSize}px`, backgroundColor: dotMap[r]?.includes(di) ? theme.accent : 'transparent' }} />)}
+                    </div>
+                  ) : <span className="font-black truncate px-1 text-slate-800" style={{ fontSize: `${fontSize}px` }}>{r}</span>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 border-t p-2 bg-slate-50 flex-shrink-0">
+            <button onClick={handleRoll} style={{ backgroundColor: theme.accent }} className="flex-grow text-white font-black py-2.5 rounded-xl shadow active:scale-95 text-base no-drag">擲骰子</button>
+            <button onClick={() => setIsSet(true)} className="btn-setting-highlight p-2.5 rounded-xl shadow-md"><IconComp name="settings" size={18} /></button>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 7. 塗鴉與畫框工具 ---
+    function CanvasTool({ data, onUpdate, width, height }) {
+      const cr = useRef(null);
+      const [isDrawing, setIsDrawing] = useState(false);
+      const customColors = data.customColors || COLORS_DEFAULT;
+
+      const applyCtxConfig = useCallback(() => {
+        const c = cr.current; if (!c) return;
+        const ctx = c.getContext('2d');
+        ctx.lineCap = 'round';
+        ctx.lineWidth = data.mode === 'eraser' ? 24 : (data.lineWidth || 4);
+        ctx.strokeStyle = data.color || '#ef4444';
+      }, [data.color, data.mode, data.lineWidth]);
+
+      useEffect(() => {
+        const c = cr.current; if (!c) return;
+        const tW = width - 32; const tH = height - 100;
+        if (c.width !== tW || c.height !== tH) {
+          const ctx = c.getContext('2d');
+          try {
+            const img = ctx.getImageData(0, 0, Math.max(1, c.width), Math.max(1, c.height));
+            c.width = tW; c.height = tH;
+            ctx.putImageData(img, 0, 0);
+          } catch (e) {
+            c.width = tW; c.height = tH;
+          }
+          applyCtxConfig();
+        }
+      }, [width, height, applyCtxConfig]);
+
+      useEffect(() => { applyCtxConfig(); }, [data.color, data.mode, data.lineWidth, applyCtxConfig]);
+
+      const getP = (e) => {
+        const r = cr.current.getBoundingClientRect();
+        return { x: (e.touches ? e.touches[0].clientX : e.clientX) - r.left, y: (e.touches ? e.touches[0].clientY : e.clientY) - r.top };
+      };
+
+      return (
+        <div className="flex flex-col h-full gap-2 overflow-hidden font-bold">
+          <div className="flex justify-between items-center bg-slate-100 p-2 rounded-xl border border-slate-200 shadow-sm text-xs">
+            <div className="flex flex-wrap gap-2 items-center flex-grow">
+              {customColors.map((c, i) => (
+                <div key={`${c}-${i}`} onClick={() => onUpdate({ data: { ...data, color: c, mode: 'draw' } })} className={`w-6 h-6 rounded-full border-2 cursor-pointer ${data.color === c && data.mode === 'draw' ? 'ring-2 ring-blue-500 scale-110 shadow-md border-white' : 'border-slate-300'}`} style={{ backgroundColor: c }} />
+              ))}
+              <div className="w-6 h-6 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center cursor-pointer relative shadow-sm">
+                <IconComp name="plus" size={12} />
+                <input type="color" onChange={(e) => onUpdate({ data: { ...data, customColors: [...customColors, e.target.value], color: e.target.value, mode: 'draw' } })} className="absolute inset-0 opacity-0 cursor-pointer" />
+              </div>
+            </div>
+            <div className="flex gap-2 items-center">
+              <button onClick={() => onUpdate({ data: { ...data, mode: 'draw' } })} className={`p-1.5 rounded-lg ${data.mode === 'draw' ? 'bg-blue-600 text-white shadow' : 'text-slate-500'}`}><IconComp name="pencil" size={16} /></button>
+              <button onClick={() => onUpdate({ data: { ...data, mode: 'eraser' } })} className={`p-1.5 rounded-lg ${data.mode === 'eraser' ? 'bg-blue-600 text-white shadow' : 'text-slate-500'}`}><IconComp name="eraser" size={16} /></button>
+              <button onClick={() => cr.current.getContext('2d').clearRect(0, 0, 9999, 9999)} className="text-slate-400 hover:text-red-500 p-1.5"><IconComp name="refresh" size={16} /></button>
+            </div>
+          </div>
+          <canvas ref={cr} onMouseDown={(e) => { setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onMouseMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onMouseUp={() => setIsDrawing(false)} onTouchStart={(e) => { initAudioContext(); setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onTouchMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onTouchEnd={() => setIsDrawing(false)} className="bg-white border rounded-2xl flex-grow cursor-crosshair shadow-inner" />
+        </div>
+      );
+    }
+
+    // --- 8. 月曆記事 ---
+    function CalendarTool({ data, onUpdate, width, height, theme }) {
+      const v = parseDateStr(data.viewDate);
+      const sDate = data.selectedDate || getLocalDateStr();
+      const y = v.getFullYear(); const m = v.getMonth();
+      const ds = new Date(y, m + 1, 0).getDate(); const fs = new Date(y, m, 1).getDay();
+      const s = Math.min(width / 550, height / 400); const calendarPartWidth = 350 * s;
+
+      return (
+        <div className="flex h-full overflow-hidden no-drag font-bold text-xs" style={{ color: theme.text }}>
+          <div className="relative flex-shrink-0 h-full" style={{ width: `${calendarPartWidth}px` }}>
+            <div className="absolute top-0 left-0 origin-top-left flex flex-col gap-2" style={{ transform: `scale(${s})`, width: '350px' }}>
+              <div className="flex justify-between items-center bg-black/5 p-2 rounded-xl border border-black/5 shadow-sm">
+                <button onClick={() => onUpdate({ data: { ...data, viewDate: getLocalDateStr(new Date(y, m - 1, 1)) } })} className="p-1 hover:bg-black/10 rounded"><IconComp name="chevronLeft" size={18} /></button>
+                <span className="font-black text-sm">{y}年 {m + 1}月</span>
+                <button onClick={() => onUpdate({ data: { ...data, viewDate: getLocalDateStr(new Date(y, m + 1, 1)) } })} className="p-1 hover:bg-black/10 rounded"><IconComp name="chevronRight" size={18} /></button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-[10px] text-center font-black opacity-80" style={{ color: theme.text }}>
+                {['日', '一', '二', '三', '四', '五', '六'].map(d => <div key={d}>{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1 flex-grow">
+                {[...Array(fs)].map((_, i) => <div key={i} />)}
+                {[...Array(ds)].map((_, i) => {
+                  const dsr = `${y}-${String(m + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+                  return (
+                    <div key={i} onClick={() => onUpdate({ data: { ...data, selectedDate: dsr, viewDate: dsr } })} className={`h-8 border rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${dsr === sDate ? 'shadow-md font-black text-white' : 'hover:bg-black/5'}`} style={{ backgroundColor: dsr === sDate ? theme.accent : '', borderColor: theme.border + '40' }}>
+                      <span className="leading-none text-xs">{i + 1}</span>
+                      {(data.notes || {})[dsr] && <div className={`w-1.5 h-1.5 rounded-full mt-1 ${dsr === sDate ? 'bg-white' : 'bg-blue-500'}`} />}
+                    </div>
+                  );
+                })}
+              </div>
+              <input className="w-full border rounded-xl px-3 py-2 text-xs outline-none bg-white font-bold text-slate-800 shadow-sm" value={(data.notes || {})[sDate] || ''} onChange={e => { const n = { ...(data.notes || {}), [sDate]: e.target.value }; if (!e.target.value) delete n[sDate]; onUpdate({ data: { ...data, notes: n } }); }} placeholder={`輸入 ${sDate} 記事...`} />
+            </div>
+          </div>
+          <div className="flex-grow border-l border-slate-200/50 ml-2 pl-2 overflow-y-auto custom-scrollbar scroll-touch-area flex flex-col min-w-0">
+            <div className="font-black border-b pb-1 mb-2 opacity-80 sticky top-0 bg-transparent z-10 text-[10px]">所有記事清單</div>
+            <div className="flex flex-col gap-1.5">
+              {Object.entries(data.notes || {}).sort().map(([d, t]) => (
+                <div key={d} onClick={() => onUpdate({ data: { ...data, selectedDate: d, viewDate: d } })} className={`p-2 rounded-xl border hover:bg-black/5 cursor-pointer transition-all ${d === sDate ? 'shadow-sm border-blue-300' : ''}`} style={{ backgroundColor: d === sDate ? theme.header : '' }}>
+                  <div className="font-black text-[10px]" style={{ color: theme.accent }}>{d}</div>
+                  <div className="truncate text-[11px] opacity-90">{t}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 9. 數據表格與週課表 ---
+    function DataTableTool({ data, onUpdate, isWeekly = false }) {
+      const cfg = data || { r: isWeekly ? 8 : 4, c: isWeekly ? 5 : 3, cells: {} };
+      const updateCfg = (upd) => onUpdate({ data: { ...cfg, ...upd } });
+
+      return (
+        <div className="h-full flex flex-col p-1 text-xs no-drag font-bold overflow-hidden">
+          <div className="flex gap-2 mb-2 items-center text-[10px] opacity-70 px-1">
+            <span>列:</span>
+            <input type="number" value={cfg.r || 4} onChange={e => updateCfg({ r: parseInt(e.target.value) || 1 })} className="w-10 border rounded px-1 text-center font-bold bg-white text-slate-800" />
+            <span>欄:</span>
+            <input type="number" value={cfg.c || 3} onChange={e => updateCfg({ c: parseInt(e.target.value) || 1 })} className="w-10 border rounded px-1 text-center font-bold bg-white text-slate-800" />
+            <button onClick={() => {
+              const csv = "\ufeff" + (isWeekly ? "節次,週一,週二,週三,週四,週五\n" : "序," + Array.from({ length: cfg.c || 3 }).map((_, i) => `第${i + 1}欄`).join(',') + "\n") +
+                Array.from({ length: cfg.r || 4 }).map((_, ri) => (ri + 1) + ',' + Array.from({ length: cfg.c || 3 }).map((_, ci) => (cfg.cells || {})[`${ri}-${ci}`] || "").join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${isWeekly ? '週課表' : '數據表格'}.csv`; link.click();
+            }} className="ml-auto flex items-center gap-1 bg-emerald-600 text-white px-2 py-1 rounded-lg shadow font-bold text-[10px]"><IconComp name="download" size={12} /> 匯出 CSV</button>
+          </div>
+          <div className="flex-1 overflow-auto border rounded-xl bg-white shadow-inner custom-scrollbar">
+            <table className="w-full border-collapse text-center text-slate-800">
+              <thead className="sticky top-0 z-10 bg-slate-100 font-bold text-slate-600 text-[11px]">
+                <tr>
+                  <th className="border p-1.5 w-10">{isWeekly ? '節' : '序'}</th>
+                  {Array.from({ length: cfg.c || 3 }).map((_, ci) => <th key={ci} className="border p-1.5">{isWeekly ? `週${ci + 1}` : `第${ci + 1}欄`}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: cfg.r || 4 }).map((_, ri) => (
+                  <tr key={ri} className="hover:bg-blue-50/50">
+                    <td className="border p-1 bg-slate-50 text-slate-500 font-black">{ri + 1}</td>
+                    {Array.from({ length: cfg.c || 3 }).map((_, ci) => (
+                      <td key={ci} className="border p-0">
+                        <input value={(cfg.cells || {})[`${ri}-${ci}`] || ""} onChange={e => updateCfg({ cells: { ...(cfg.cells || {}), [`${ri}-${ci}`]: e.target.value } })} className="w-full p-1.5 bg-transparent outline-none font-bold text-center text-xs" placeholder="..." />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 10. 文字筆記、圖片、QR碼與倒數日 ---
+    function TextTool({ data, onUpdate }) {
+      return (
+        <div className="flex flex-col h-full gap-2 no-drag font-bold text-slate-800">
+          <div className="flex items-center gap-3 border-b pb-1.5 bg-slate-50 p-1.5 rounded-xl border">
+            <div className="flex items-center gap-1 text-xs"><span className="text-[10px] text-slate-500">字體:</span><input type="number" className="w-12 border rounded px-1 py-0.5 text-xs text-center font-bold" value={data.fontSize || 20} onChange={(e) => onUpdate({ data: { ...data, fontSize: parseInt(e.target.value) || 12 } })} /></div>
+            <div className="flex items-center gap-1 text-xs"><span className="text-[10px] text-slate-500">顏色:</span><input type="color" className="w-6 h-6 border-none bg-transparent cursor-pointer" value={data.color || '#000000'} onChange={(e) => onUpdate({ data: { ...data, color: e.target.value } })} /></div>
+          </div>
+          <textarea className="flex-grow w-full p-2 focus:outline-none resize-none bg-transparent font-bold" style={{ fontSize: `${data.fontSize || 20}px`, color: data.color || '#000000', lineHeight: 1.4 }} value={data.content || ""} onChange={(e) => onUpdate({ data: { ...data, content: e.target.value } })} placeholder="在此輸入筆記內容..." />
+        </div>
+      );
+    }
+
+    function ImageTool({ data, onUpdate }) {
+      const fileRef = useRef(null);
+      return (
+        <div className="flex flex-col h-full gap-2 no-drag font-bold text-slate-800">
+          {!data.url ? (
+            <div className="flex-grow flex flex-col items-center justify-center gap-3 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 p-4">
+              <IconComp name="image" size={36} className="text-slate-300" />
+              <div className="flex items-center gap-2">
+                <button onClick={() => fileRef.current.click()} className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-md">上傳圖片</button>
+                <input type="text" className="border rounded-xl px-2 py-1 text-xs text-center w-40 outline-none" placeholder="貼上網址..." onBlur={(e) => e.target.value && onUpdate({ data: { ...data, url: e.target.value } })} />
+              </div>
+              <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={(e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => onUpdate({ data: { ...data, url: ev.target.result } }); reader.readAsDataURL(file); }} />
+            </div>
+          ) : (
+            <div className="flex-grow relative group/img overflow-hidden rounded-xl">
+              <img src={data.url} className={`w-full h-full ${data.fit === 'cover' ? 'object-cover' : 'object-contain'}`} />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button onClick={() => onUpdate({ data: { ...data, fit: data.fit === 'cover' ? 'contain' : 'cover' } })} className="bg-white text-slate-800 px-3 py-1 rounded-full text-xs font-bold shadow">縮放</button>
+                <button onClick={() => onUpdate({ data: { ...data, url: '' } })} className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow">移除</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function QRTool({ data, onUpdate }) {
+      const qrUrl = data.url ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.url)}` : '';
+      return (
+        <div className="flex flex-col h-full gap-2 p-1 no-drag font-bold text-slate-800">
+          <div className="flex items-center gap-2 border-b pb-2 bg-slate-50 p-2 rounded-xl border">
+            <span className="text-[10px] font-black text-blue-600">網址/文字:</span>
+            <input type="text" className="flex-grow border rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-400" placeholder="輸入網址..." value={data.url || ""} onChange={(e) => onUpdate({ data: { ...data, url: e.target.value } })} />
+          </div>
+          <div className="flex-grow flex items-center justify-center bg-white rounded-2xl border shadow-inner p-2">
+            {data.url ? <img src={qrUrl} alt="QR Code" className="max-w-[85%] max-h-[85%] object-contain" /> : <span className="text-xs text-slate-300 italic">自動生成 QR 碼</span>}
+          </div>
+        </div>
+      );
+    }
+
+    function CountdownToolComp({ data, onUpdate, width, height, theme }) {
+      const d = new Date(data.date);
+      const df = isNaN(d.getTime()) ? '?' : Math.max(0, Math.ceil((d - new Date()) / 86400000));
+      const s = Math.min(width / 350, height / 300);
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center no-drag font-bold" style={{ color: theme.text }}>
+          <input className="text-center font-black bg-transparent outline-none border-b border-black/10 w-full" style={{ fontSize: `${20 * s}px`, color: theme.text }} value={data.title || "目標倒數"} onChange={e => onUpdate({ data: { ...data, title: e.target.value } })} />
+          <div className="font-black leading-tight my-2" style={{ fontSize: `${65 * s}px`, color: theme.accent }}>{df} <span style={{ fontSize: `${20 * s}px` }}>天</span></div>
+          <input type="date" className="border rounded-full px-3 py-1 text-xs outline-none bg-white text-slate-800 shadow-sm" value={data.date || getLocalDateStr()} onChange={e => onUpdate({ data: { ...data, date: e.target.value } })} />
+        </div>
+      );
+    }
+
+    // --- 11. 小工具內容分發 ---
+    function ToolContent(p) {
+      const { tool, theme } = p;
+      const commonProps = { ...p, data: tool.data || {}, theme };
+      switch (tool.type) {
+        case 'score': return <ScoreKeeperTool {...commonProps} />;
+        case 'lottery': return <LotteryTool {...commonProps} />;
+        case 'photoLottery': return <PhotoLottery {...commonProps} />;
+        case 'timer': return <TimerWidget {...commonProps} />;
+        case 'dice': return <DiceTool {...commonProps} />;
+        case 'pen': case 'canvas': return <CanvasTool {...commonProps} />;
+        case 'text': return <TextTool {...commonProps} />;
+        case 'countdown': return <CountdownToolComp {...commonProps} />;
+        case 'calendar': return <CalendarTool {...commonProps} />;
+        case 'clock': return <ClockTool {...commonProps} />;
+        case 'timetable': return <DataTableTool {...commonProps} isWeekly={true} />;
+        case 'table': return <DataTableTool {...commonProps} isWeekly={false} />;
+        case 'image': return <ImageTool {...commonProps} />;
+        case 'qr': return <QRTool {...commonProps} />;
+        default: return null;
+      }
+    }
+
+    // --- 12. 浮動視窗容器 ---
+    function ToolContainer({ tool, onUpdate, onClose, ...extraProps }) {
+      const [drag, setDrag] = useState(false);
+      const [resize, setResize] = useState(false);
+      const [off, setOff] = useState({ x: 0, y: 0 });
+      const [showThemes, setShowThemes] = useState(false);
+
+      const currentTheme = useMemo(() => TOOL_THEMES.find(t => t.id === (tool.theme || 'slate')) || TOOL_THEMES[0], [tool.theme]);
+
+      const start = (e, type) => {
+        if (e.target.closest('.scroll-touch-area') || e.target.closest('.no-drag')) return;
+        const cX = e.touches ? e.touches[0].clientX : e.clientX;
+        const cY = e.touches ? e.touches[0].clientY : e.clientY;
+        initAudioContext();
+        if (type === 'drag') {
+          setDrag(true);
+          setOff({ x: cX - tool.x, y: cY - tool.y });
+        } else {
+          setResize(true);
+          setOff({ startX: cX, startY: cY, startW: tool.w, startH: tool.h });
+        }
+      };
+
+      useEffect(() => {
+        const move = (e) => {
+          if (!drag && !resize) return;
+          const cX = e.touches ? e.touches[0].clientX : e.clientX;
+          const cY = e.touches ? e.touches[0].clientY : e.clientY;
+          if (drag) onUpdate({ x: cX - off.x, y: cY - off.y });
+          if (resize) onUpdate({ w: Math.max(180, off.startW + (cX - off.startX)), h: Math.max(120, off.startH + (cY - off.startY)) });
+        };
+        const end = () => { setDrag(false); setResize(false); };
+        window.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+        window.addEventListener('touchmove', move); window.addEventListener('touchend', end);
+        return () => {
+          window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', end);
+          window.removeEventListener('touchmove', move); window.removeEventListener('touchend', end);
+        };
+      }, [drag, resize, off, onUpdate]);
+
+      return (
+        <div className="tool-container absolute rounded-2xl shadow-2xl border-2 flex flex-col overflow-hidden font-bold" style={{ left: tool.x, top: tool.y, width: tool.w, height: tool.h, zIndex: drag || resize ? 100 : 10, borderColor: currentTheme.border, backgroundColor: currentTheme.bg }}>
+          <div className="h-9 border-b flex justify-between px-3 items-center cursor-move select-none font-bold" style={{ backgroundColor: currentTheme.header }} onMouseDown={e => start(e, 'drag')} onTouchStart={e => start(e, 'drag')}>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowThemes(!showThemes)} className="no-drag p-1 hover:bg-black/10 rounded-full transition-colors">
+                <IconComp name="palette" size={14} style={{ color: currentTheme.accent }} />
+              </button>
+              <div className="flex items-center gap-1.5 font-black text-xs" style={{ color: currentTheme.accent }}>
+                <IconComp name={getToolIcon(tool.type)} size={14} />
+                <span>{getToolLabel(tool.type)}</span>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-full no-drag">
+              <IconComp name="x" size={16} />
+            </button>
+          </div>
+
+          {showThemes && (
+            <div className="absolute top-10 left-3 z-[150] bg-white shadow-2xl border rounded-2xl p-2.5 flex flex-wrap gap-1.5 w-[220px] no-drag animate-pop">
+              {TOOL_THEMES.map(t => (
+                <button key={t.id} onClick={() => { onUpdate({ theme: t.id }); setShowThemes(false); }} className="w-7 h-7 rounded-full border shadow-sm transition-transform hover:scale-110" style={{ backgroundColor: t.accent }} title={t.name} />
+              ))}
+            </div>
+          )}
+
+          <div className="flex-grow p-3 overflow-hidden relative font-bold text-slate-800">
+            <ToolContent tool={tool} onUpdate={onUpdate} width={tool.w} height={tool.h} theme={currentTheme} {...extraProps} />
+          </div>
+
+          <div className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center" onMouseDown={e => { e.stopPropagation(); start(e, 'res'); }} onTouchStart={e => { e.stopPropagation(); start(e, 'res'); }}>
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: currentTheme.border }} />
+          </div>
+        </div>
+      );
+    }
+
+    function SideIcon({ name, label, onClick, onFav, isFav }) {
+      return (
+        <div className="side-icon-container group relative flex flex-col items-center font-bold">
+          <button onClick={() => { initAudioContext(); onClick(); }} className="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-300 hover:bg-blue-600 hover:text-white transition-all active:scale-90 shadow-md">
+            <IconComp name={name} size={20} />
+          </button>
+          <div onClick={onFav} className={`absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 border border-slate-700 cursor-pointer transition-all ${isFav ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            <IconComp name="star" size={10} className={isFav ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500'} />
+          </div>
+          <div className="side-tooltip">{label}</div>
+        </div>
+      );
+    }
+
+    // --- 13. 主應用程式 ---
+    const App = () => {
+      const [isLoading, setIsLoading] = useState(true);
+      const [windows, setWindows] = useState([{ id: 'win-1', title: '主工作區', tools: [], bg: { type: 'color', value: '#ffffff' }, favs: [] }]);
+      const [activeId, setActiveId] = useState('win-1');
+      const [globalConfig, setGlobalConfig] = useState({
+        classes: [{ id: 1, name: "三年一班", students: [{ id: 1, name: "張小明" }, { id: 2, name: "李小華" }, { id: 3, name: "王大同" }] }],
+        rules: [{ label: '表現優異', score: 1.0, icon: '🌟' }, { label: '熱心服務', score: 1.0, icon: '❤️' }, { label: '秩序需加強', score: -1.0, icon: '⚠️' }]
+      });
+      const [savedLists, setSavedLists] = useState([]);
+      const [editingWinId, setEditingWinId] = useState(null);
+      const [confirmTabDelId, setConfirmTabDelId] = useState(null);
+      const [sidebarView, setSidebarView] = useState('tools'); // 'tools' | 'database'
+      const [editingClassId, setEditingClassId] = useState(null);
+      const bgInputRef = useRef(null);
+
+      // 本機讀取
+      useEffect(() => {
+        const localData = localStorage.getItem('classroom_whiteboard_merged_v11');
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData);
+            if (parsed.windows) setWindows(parsed.windows);
+            if (parsed.activeId) setActiveId(parsed.activeId);
+            if (parsed.globalConfig) setGlobalConfig(parsed.globalConfig);
+            if (parsed.savedLists) setSavedLists(parsed.savedLists);
+          } catch (e) {}
+        }
+        setIsLoading(false);
+      }, []);
+
+      // 自動存檔至 LocalStorage
+      useEffect(() => {
+        if (!isLoading) {
+          try {
+            localStorage.setItem('classroom_whiteboard_merged_v11', JSON.stringify({ windows, activeId, globalConfig, savedLists }));
+          } catch (e) {
+            console.warn('LocalStorage 儲存提示: 檔案較大或配額滿', e);
+          }
+        }
+      }, [windows, activeId, globalConfig, savedLists, isLoading]);
+
+      // 匯出完整 JSON 備份
+      const handleBackupAll = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ windows, activeId, globalConfig, savedLists }, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `小白板與經營資料備份_${getLocalDateStr()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+      };
+
+      // 匯入 JSON 備份檔
+      const handleRestoreAll = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const parsed = JSON.parse(ev.target.result);
+            if (parsed.windows) setWindows(parsed.windows);
+            if (parsed.globalConfig) setGlobalConfig(parsed.globalConfig);
+            if (parsed.savedLists) setSavedLists(parsed.savedLists);
+            if (parsed.activeId) setActiveId(parsed.activeId);
+          } catch (err) {}
+        };
+        reader.readAsText(file);
+      };
+
+      const activeWin = useMemo(() => windows.find(w => w.id === activeId) || windows[0], [windows, activeId]);
+
+      const toggleFavorite = (type) => {
+        setWindows(prev => prev.map(w => w.id === activeId ? { ...w, favs: (w.favs || []).includes(type) ? w.favs.filter(f => f !== type) : [...(w.favs || []), type] } : w));
+      };
+
+      const addTool = (type) => {
+        const today = getLocalDateStr();
+        const defData = (t) => {
+          switch (t) {
+            case 'score': return { logs: [], currentClassId: globalConfig?.classes?.[0]?.id || null };
+            case 'lottery': {
+              const firstCls = globalConfig?.classes?.[0];
+              const initialNames = firstCls ? (firstCls.students || []).map(s => s.name) : [];
+              return {
+                list: initialNames.join('\n'),
+                selectedClassId: firstCls?.id || null,
+                count: 1,
+                exclude: true,
+                winners: [],
+                currentPicked: null,
+                selectedItems: initialNames
+              };
+            }
+            case 'photoLottery': return { count: 1, exclude: true, winners: [], currentPicked: null, photoList: [], folderPath: '' };
+            case 'timer': return { mode: 'timer', time: 60, status: 'idle' };
+            case 'dice': return { configs: [{ type: 'dots', custom: '' }], results: [1] };
+            case 'pen': case 'canvas': return { color: '#ef4444', mode: 'draw', customColors: COLORS_DEFAULT, lineWidth: 4 };
+            case 'text': return { content: '', fontSize: 22, color: '#000000' };
+            case 'countdown': return { title: '目標倒數', date: today };
+            case 'clock': return { style: 'digital' };
+            case 'calendar': return { notes: {}, selectedDate: today, viewDate: today };
+            case 'timetable': return { r: 8, c: 5, cells: {} };
+            case 'table': return { r: 4, c: 3, cells: {} };
+            case 'image': return { url: '', fit: 'contain' };
+            case 'qr': return { url: '' };
+            default: return {};
+          }
+        };
+
+        const isLarge = ['calendar', 'dice', 'lottery', 'photoLottery', 'timetable', 'table', 'score'].includes(type);
+        setWindows(prev => prev.map(w => w.id === activeId ? {
+          ...w,
+          tools: [...w.tools, {
+            id: Date.now() + Math.random(),
+            type, x: 60, y: 60, theme: 'slate',
+            w: isLarge ? 520 : 320,
+            h: isLarge ? 400 : 300,
+            data: defData(type)
+          }]
+        } : w));
+      };
+
+      const sortedToolTypes = useMemo(() => {
+        const base = ['score', 'lottery', 'photoLottery', 'timer', 'calendar', 'timetable', 'pen', 'text', 'dice', 'table', 'image', 'qr', 'countdown', 'clock'];
+        const currentFavs = activeWin?.favs || [];
+        return [...base].sort((a, b) => {
+          const aFav = currentFavs.includes(a); const bFav = currentFavs.includes(b);
+          if (aFav && !bFav) return -1; if (!aFav && bFav) return 1; return 0;
+        });
+      }, [activeWin?.favs]);
+
+      if (isLoading) return null;
+
+      return (
+        <div className="flex flex-col h-screen w-full bg-slate-900 text-slate-100 overflow-hidden select-none font-bold">
+          {/* 上方導覽列 */}
+          <header className="h-12 bg-slate-800 border-b border-slate-700 flex items-center px-3 gap-3 flex-shrink-0 shadow-md">
+            <div className="flex items-center gap-2 text-blue-400 font-black text-lg mr-2">
+              <IconComp name="layers" size={22} />
+              <span className="hidden md:inline">班級經營小白板 Pro</span>
+            </div>
+
+            {/* 分頁 Tab */}
+            <div className="flex-grow flex items-center min-w-0 gap-1 overflow-hidden">
+              <div className="flex-1 flex gap-1 overflow-x-auto no-scrollbar items-center py-0.5 scroll-touch-area">
+                {windows.map(w => (
+                  <div key={w.id} onClick={() => setActiveId(w.id)} onDoubleClick={(e) => { e.stopPropagation(); setEditingWinId(w.id); }} className={`group px-3 py-1.5 rounded-t-xl cursor-pointer text-xs whitespace-nowrap flex items-center gap-2 transition-all flex-shrink-0 ${activeId === w.id ? 'bg-slate-700 border-b-2 border-blue-500 text-white shadow font-black' : 'text-slate-400 hover:bg-slate-750'}`} title="按兩下修改名稱">
+                    {editingWinId === w.id ? (
+                      <input 
+                        autoFocus 
+                        className="bg-blue-600/50 text-white outline-none px-1.5 py-0.5 rounded w-24 border border-blue-400 font-bold text-xs" 
+                        value={w.title} 
+                        onChange={(e) => setWindows(prev => prev.map(win => win.id === w.id ? { ...win, title: e.target.value } : win))} 
+                        onBlur={() => setEditingWinId(null)} 
+                        onKeyDown={(e) => e.key === 'Enter' && setEditingWinId(null)} 
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span>{w.title}</span>
+                    )}
+                    {windows.length > 1 && (
+                      <button onClick={(e) => { e.stopPropagation(); setConfirmTabDelId(w.id); }} className="hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"><IconComp name="x" size={12} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => { const id = `win-${Date.now()}`; setWindows([...windows, { id, title: `分頁 ${windows.length + 1}`, tools: [], bg: { type: 'color', value: '#ffffff' }, favs: [] }]); setActiveId(id); }} className="p-1.5 text-slate-300 hover:text-white transition-colors bg-slate-700 hover:bg-slate-600 rounded-lg flex-shrink-0 mx-1 shadow-sm flex items-center justify-center" title="新增分頁">
+                <IconComp name="plus" size={16} />
+              </button>
+            </div>
+
+            {/* 背景與資料存取按鈕 */}
+            <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
+              {BG_COLORS.map(c => (
+                <button key={c} onClick={() => setWindows(prev => prev.map(w => w.id === activeId ? { ...w, bg: { type: 'color', value: c } } : w))} className="w-5 h-5 rounded-full border border-white/20 shadow-sm hover:scale-110 transition-transform" style={{ backgroundColor: c }} />
+              ))}
+              <button onClick={() => setWindows(prev => prev.map(w => w.id === activeId ? { ...w, bg: { type: 'image', value: `https://picsum.photos/1920/1080?random=${Date.now()}` } } : w))} className="bg-slate-700 hover:bg-blue-600 text-[10px] px-2 py-1 rounded-full border border-slate-600 transition-colors">隨機背景</button>
+              <button onClick={() => bgInputRef.current.click()} className="bg-slate-700 hover:bg-green-600 text-[10px] px-2 py-1 rounded-full border border-slate-600 transition-colors">上傳背景</button>
+              <input type="file" ref={bgInputRef} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => setWindows(prev => prev.map(w => w.id === activeId ? { ...w, bg: { type: 'image', value: ev.target.result } } : w)); r.readAsDataURL(f); }} className="hidden" accept="image/*" />
+
+              <div className="h-4 w-px bg-slate-700 mx-1" />
+              <button onClick={handleBackupAll} className="bg-slate-700 hover:bg-slate-600 text-white text-[10px] px-2.5 py-1 rounded-xl border border-slate-600 flex items-center gap-1 shadow-sm"><IconComp name="download" size={12} /> 備份全站</button>
+              <label className="bg-slate-700 hover:bg-slate-600 text-white text-[10px] px-2.5 py-1 rounded-xl border border-slate-600 flex items-center gap-1 cursor-pointer shadow-sm"><IconComp name="upload" size={12} /> 讀取備份<input type="file" onChange={handleRestoreAll} accept=".json" hidden /></label>
+            </div>
+          </header>
+
+          <main className="flex-grow flex relative overflow-hidden">
+            {/* 側邊工具與資料庫抽屜 */}
+            <aside className="w-14 bg-slate-800 border-r border-slate-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 z-20 shadow-lg custom-scrollbar">
+              <div className="flex flex-col gap-1 w-full px-1 mb-2 border-b border-slate-700 pb-2">
+                <button onClick={() => setSidebarView('tools')} className={`p-2 rounded-xl flex justify-center ${sidebarView === 'tools' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`} title="工具箱">
+                  <IconComp name="layers" size={18} />
+                </button>
+                <button onClick={() => setSidebarView('database')} className={`p-2 rounded-xl flex justify-center ${sidebarView === 'database' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`} title="班級名單與評分資料庫">
+                  <IconComp name="database" size={18} />
+                </button>
+              </div>
+
+              {sidebarView === 'tools' ? (
+                sortedToolTypes.map(type => (
+                  <SideIcon key={type} name={getToolIcon(type)} label={getToolLabel(type)} onClick={() => addTool(type)} onFav={() => toggleFavorite(type)} isFav={(activeWin?.favs || []).includes(type)} />
+                ))
+              ) : (
+                <div className="text-[10px] text-center text-blue-400 font-bold tracking-widest uppercase">DB</div>
+              )}
+
+              <div className="mt-auto pt-4 flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
+                <span className="text-[9px] text-blue-400 font-black">v11.0</span>
+              </div>
+            </aside>
+
+            {/* 資料庫與班級設定抽屜內頁 */}
+            {sidebarView === 'database' && (
+              <div className="w-72 bg-slate-800 border-r border-slate-700 p-3 overflow-y-auto custom-scrollbar z-20 animate-pop text-xs font-bold text-slate-200">
+                <div className="flex justify-between items-center border-b border-slate-700 pb-2 mb-3">
+                  <span className="font-black text-sm text-blue-400">班級名單資料庫</span>
+                  <button onClick={() => setSidebarView('tools')} className="text-slate-400 hover:text-white"><IconComp name="x" size={16} /></button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* 班級名單編輯 */}
+                  <div>
+                    <div className="text-slate-400 mb-1 text-[10px] uppercase font-black">班級列表 (點擊編輯學生)</div>
+                    <div className="space-y-2">
+                      {(globalConfig.classes || []).map(c => {
+                        const isEditing = editingClassId === c.id;
+                        return (
+                          <div key={c.id} className="bg-slate-900/80 rounded-xl border border-slate-700 overflow-hidden">
+                            <div className="p-2 flex justify-between items-center">
+                              <input value={c.name} onChange={e => { const n = globalConfig.classes.map(x => x.id === c.id ? { ...x, name: e.target.value } : x); setGlobalConfig({ ...globalConfig, classes: n }); }} className="bg-transparent font-black text-xs outline-none text-white w-28" />
+                              <div className="flex gap-1">
+                                <button onClick={() => setEditingClassId(isEditing ? null : c.id)} className={`p-1 rounded ${isEditing ? 'bg-green-600 text-white' : 'bg-slate-700 text-blue-400'}`}>
+                                  <IconComp name={isEditing ? 'check' : 'pencil'} size={12} />
+                                </button>
+                                <button onClick={() => { const n = globalConfig.classes.filter(x => x.id !== c.id); setGlobalConfig({ ...globalConfig, classes: n }); }} className="p-1 bg-slate-700 text-red-400 rounded"><IconComp name="trash" size={12} /></button>
+                              </div>
+                            </div>
+                            {isEditing && (
+                              <div className="p-2 pt-0">
+                                <textarea defaultValue={(c.students || []).map(s => s.name).join('\n')} onBlur={e => { const nList = e.target.value.split('\n').filter(x => x.trim()).map((x, i) => ({ id: i + 1, name: x.trim() })); const nCls = globalConfig.classes.map(x => x.id === c.id ? { ...x, students: nList } : x); setGlobalConfig({ ...globalConfig, classes: nCls }); }} placeholder="每行輸入名字..." className="w-full h-28 bg-slate-950 rounded-lg p-2 text-xs outline-none font-mono text-slate-200 border border-slate-800" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button onClick={() => { const n = { id: Date.now(), name: "新班級", students: [] }; setGlobalConfig({ ...globalConfig, classes: [...globalConfig.classes, n] }); setEditingClassId(n.id); }} className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 border border-dashed border-slate-500 rounded-xl text-xs font-bold text-blue-300">+ 新增班級</button>
+                    </div>
+                  </div>
+
+                  {/* 全域加減分標準 */}
+                  <div className="border-t border-slate-700 pt-3">
+                    <div className="text-slate-400 mb-1 text-[10px] uppercase font-black">加減分評分項目</div>
+                    <div className="space-y-1.5">
+                      {(globalConfig.rules || []).map((r, i) => (
+                        <div key={i} className="flex gap-1 items-center bg-slate-900/80 p-1.5 rounded-xl border border-slate-700">
+                          <input value={r.icon} onChange={e => { const n = [...globalConfig.rules]; n[i].icon = e.target.value; setGlobalConfig({ ...globalConfig, rules: n }); }} className="w-6 text-center bg-transparent outline-none text-xs" />
+                          <input value={r.label} onChange={e => { const n = [...globalConfig.rules]; n[i].label = e.target.value; setGlobalConfig({ ...globalConfig, rules: n }); }} className="flex-1 bg-transparent outline-none text-[11px]" />
+                          <input type="number" step="0.5" value={r.score} onChange={e => { const n = [...globalConfig.rules]; n[i].score = parseFloat(e.target.value) || 0; setGlobalConfig({ ...globalConfig, rules: n }); }} className="w-10 bg-transparent outline-none text-[11px] font-black text-center" />
+                          <button onClick={() => { const n = globalConfig.rules.filter((_, idx) => idx !== i); setGlobalConfig({ ...globalConfig, rules: n }); }} className="text-red-400 p-1"><IconComp name="trash" size={12} /></button>
+                        </div>
+                      ))}
+                      <button onClick={() => { const n = { label: "新項目", score: 1.0, icon: "✿" }; setGlobalConfig({ ...globalConfig, rules: [...globalConfig.rules, n] }); }} className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 border border-dashed border-slate-500 rounded-xl text-xs font-bold text-blue-300">+ 新增評分標準</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 主工作畫布區域 */}
+            <div className="flex-grow relative overflow-hidden font-bold" style={{ backgroundColor: activeWin?.bg.type === 'color' ? activeWin.bg.value : 'transparent', backgroundImage: activeWin?.bg.type === 'image' ? `url(${activeWin.bg.value})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+              {activeWin?.tools.map(tool => (
+                <ToolContainer key={tool.id} tool={tool} onUpdate={(u) => setWindows(prev => prev.map(w => w.id === activeId ? { ...w, tools: w.tools.map(t => t.id === tool.id ? { ...t, ...u } : t) } : w))} onClose={() => setWindows(ws => ws.map(w => w.id === activeId ? { ...w, tools: w.tools.filter(t => t.id !== tool.id) } : w))} globalConfig={globalConfig} savedLists={savedLists} onSaveList={(n, c) => setSavedLists(prev => [...prev, { id: Date.now(), name: n, content: c }])} onDeleteList={(id) => setSavedLists(prev => prev.filter(l => l.id !== id))} />
+              ))}
+            </div>
+          </main>
+
+          {/* 刪除分頁確認對話框 */}
+          <CustomConfirm show={!!confirmTabDelId} title="刪除分頁？" message="確定要移除此工作區？頁面內的小工具將一併刪除。" onConfirm={() => { setWindows(prev => prev.filter(w => w.id !== confirmTabDelId)); if (activeId === confirmTabDelId && windows.length > 1) setActiveId(windows.find(w => w.id !== confirmTabDelId).id); setConfirmTabDelId(null); }} onCancel={() => setConfirmTabDelId(null)} />
+        </div>
+      );
+    };
+
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      ReactDOM.createRoot(rootElement).render(<App />);
+    }
+  </script>
+</body>
+</html>
