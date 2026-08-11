@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>互動班級經營與小白板 v11.0 旗艦整合版</title>
+  <title>互動班級經營與小白板 v12.0 旗艦整合版</title>
   
   <!-- 載入 React 18, Babel, 與 Tailwind CSS -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -102,12 +102,6 @@
       background-color: #1d4ed8;
       transform: scale(1.05);
     }
-    .resize-h { position: absolute; right: 0; top: 0; bottom: 15px; width: 10px; cursor: ew-resize; z-index: 50; }
-    .resize-v { position: absolute; bottom: 0; left: 0; right: 15px; height: 10px; cursor: ns-resize; z-index: 50; }
-    .resize-both { position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; z-index: 60; background: rgba(0,0,0,0.05); border-radius: 8px 0 0 0; }
-    .resize-h:hover, .resize-v:hover { background: rgba(59, 130, 246, 0.2); }
-    .resize-both:hover { background: rgba(59, 130, 246, 0.3); }
-    
     .animate-pop { animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     @keyframes popIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   </style>
@@ -122,7 +116,6 @@
   </div>
 
   <script type="text/babel">
-    // 阻斷性原生 API 處理機制
     window.confirm = (msg) => true;
 
     const { useState, useEffect, useRef, useMemo, useCallback } = React;
@@ -138,7 +131,8 @@
       dices: <><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="8.5" cy="15.5" r="1.5"/><circle cx="15.5" cy="8.5" r="1.5"/></>,
       layers: <><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></>,
       star: <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
-      users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+      users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 1 0 7.75"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+      grouping: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
       clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14" /></>,
       calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
       refresh: <><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
@@ -153,7 +147,6 @@
       image: <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h18a2 2 0 0 1 2 2zM8.5 8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM21 15l-5-5L5 21" />,
       qr: <path d="M3 11V3h8v8H3zm0 10v-8h8v8H3zm10-10V3h8v8h-8zm0 10v-8h8v8h-8zM7 7h1M7 17h1M17 7h1M17 17h1" />,
       settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />,
-      gallery: <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></>,
       award: <><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></>,
       table: <><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18"/></>,
       database: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></>,
@@ -170,7 +163,6 @@
       </svg>
     );
 
-    // --- 豐富的主題色彩庫 ---
     const TOOL_THEMES = [
       { id: 'slate', name: '經典灰', border: '#cbd5e1', header: '#f1f5f9', bg: '#ffffff', text: '#1e293b', accent: '#475569' },
       { id: 'blue', name: '天空藍', border: '#bae6fd', header: '#f0f9ff', bg: '#ffffff', text: '#0369a1', accent: '#0ea5e9' },
@@ -186,18 +178,12 @@
       { id: 'dark-onyx', name: '曜石黑', border: '#44403c', header: '#1c1917', bg: '#1c1917', text: '#ffffff', accent: '#fcd34d', isDark: true },
       { id: 'dark-forest', name: '深幽綠', border: '#064e3b', header: '#022c22', bg: '#022c22', text: '#ecfdf5', accent: '#6ee7b7', isDark: true },
       { id: 'dark-wine', name: '勃根地', border: '#881337', header: '#4c0519', bg: '#4c0519', text: '#fff1f2', accent: '#fda4af', isDark: true },
-      { id: 'dark-slate', name: '曜石灰', border: '#334155', header: '#0f172a', bg: '#0f172a', text: '#f8fafc', accent: '#cbd5e1', isDark: true },
-      { id: 'dark-purple', name: '紫夜深', border: '#581c87', header: '#2e1065', bg: '#2e1065', text: '#f5f3ff', accent: '#d8b4fe', isDark: true },
-      { id: 'dark-ocean', name: '深海藍', border: '#1e3a8a', header: '#172554', bg: '#172554', text: '#eff6ff', accent: '#93c5fd', isDark: true },
-      { id: 'dark-choco', name: '咖啡深', border: '#451a03', header: '#271709', bg: '#271709', text: '#fffbeb', accent: '#fde68a', isDark: true },
-      { id: 'dark-lava', name: '熔岩紅', border: '#7f1d1d', header: '#450a0a', bg: '#450a0a', text: '#fef2f2', accent: '#fca5a5', isDark: true },
-      { id: 'dark-mint', name: '薄荷深', border: '#065f46', header: '#022c22', bg: '#022c22', text: '#f0fdf4', accent: '#6ee7b7', isDark: true }
+      { id: 'dark-slate', name: '曜石灰', border: '#334155', header: '#0f172a', bg: '#0f172a', text: '#f8fafc', accent: '#cbd5e1', isDark: true }
     ];
 
     const BG_COLORS = ['#ffffff', '#cbd5e1', '#ef4444', '#22c55e', '#3b82f6', '#eab308', '#0f172a'];
     const COLORS_DEFAULT = ['#000000', '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ffffff'];
 
-    // --- 音效合成器 (Web Audio API) ---
     let audioCtx = null;
     function initAudioContext() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -244,16 +230,15 @@
     };
 
     const getToolIcon = (t) => ({
-      lottery:'users', photoLottery:'gallery', score:'award', timer:'timer', pen:'pencil', canvas:'layers', text:'type',
+      lottery:'users', grouping:'grouping', photoLottery:'gallery', score:'award', timer:'timer', pen:'pencil', canvas:'layers', text:'type',
       dice:'dices', clock:'clock', countdown:'hourglass', calendar:'calendar', timetable:'layout', table:'table', image:'image', qr:'qr'
     }[t] || 'settings');
 
     const getToolLabel = (t) => ({
-      lottery:'抽籤助手', photoLottery:'選圖助手', score:'加減分助手', timer:'計時器', pen:'塗鴉小白板', canvas:'畫框', text:'文字筆記',
+      lottery:'抽籤助手', grouping:'自動分組', photoLottery:'選圖助手', score:'加減分助手', timer:'計時器', pen:'塗鴉小白板', canvas:'畫框', text:'文字筆記',
       dice:'自訂骰子', clock:'時鐘', countdown:'目標倒數', calendar:'月曆記事', timetable:'週課表', table:'數據表格', image:'圖片展示', qr:'QR碼產生器'
     }[t] || '小工具');
 
-    // --- 通用確認對話框組件 ---
     const CustomConfirm = ({ show, title, message, onConfirm, onCancel }) => {
       if (!show) return null;
       return (
@@ -273,7 +258,140 @@
       );
     };
 
-    // --- 1. 加減分助手 ---
+    function GroupingTool({ data, onUpdate, globalConfig, theme, width, height }) {
+      const [viewMode, setViewMode] = useState('result');
+      const [isRolling, setIsRolling] = useState(false);
+
+      const parsedItems = useMemo(() => (data.list || "").split(/[\n\r]+/).map(s => s.trim()).filter(Boolean), [data.list]);
+
+      const handleGroup = () => {
+        if (!parsedItems.length) return;
+        setIsRolling(true); setViewMode('result');
+
+        setTimeout(() => {
+          const shuffled = [...parsedItems];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          let resGroups = [];
+          const mode = data.mode || 'byCount';
+          const targetVal = Math.max(1, parseInt(data.value) || 1);
+
+          if (mode === 'byCount') {
+            resGroups = Array.from({ length: targetVal }, () => []);
+            shuffled.forEach((name, idx) => {
+              resGroups[idx % targetVal].push(name);
+            });
+          } else {
+            for (let i = 0; i < shuffled.length; i += targetVal) {
+              resGroups.push(shuffled.slice(i, i + targetVal));
+            }
+          }
+
+          playWinSound();
+          onUpdate({ data: { ...data, groups: resGroups } });
+          setIsRolling(false);
+        }, 250);
+      };
+
+      const groups = data.groups || [];
+
+      if (viewMode === 'result') {
+        return (
+          <div className="flex flex-col h-full relative overflow-hidden font-bold" style={{ color: theme.text }}>
+            <div className="flex justify-between px-3 py-1 text-[10px] opacity-70 bg-black/5 rounded-t-lg">
+              <span>總人數：{parsedItems.length} 人</span>
+              <span>分組數量：{groups.length} 組</span>
+            </div>
+            <div className="flex-grow p-2 overflow-y-auto custom-scrollbar no-drag grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {groups.length > 0 ? groups.map((grp, gIdx) => (
+                <div key={gIdx} className="bg-white/80 border rounded-xl p-2 shadow-sm flex flex-col" style={{ borderColor: theme.border }}>
+                  <div className="font-black text-xs border-b pb-1 mb-1.5 flex justify-between items-center" style={{ color: theme.accent }}>
+                    <span>第 {gIdx + 1} 組</span>
+                    <span className="text-[10px] opacity-70">{grp.length} 人</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {grp.map((m, mIdx) => (
+                      <span key={mIdx} className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md text-[11px] font-bold border border-slate-200">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )) : (
+                <div className="col-span-full flex flex-col items-center justify-center opacity-40 py-10 gap-2">
+                  <IconComp name="grouping" size={36} />
+                  <span className="text-xs">請點擊下方設定開始分組</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 border-t p-2 bg-slate-50 flex-shrink-0">
+              <button onClick={handleGroup} disabled={isRolling || !parsedItems.length} style={{ backgroundColor: theme.accent }} className="flex-grow text-white font-black py-2.5 rounded-xl shadow active:scale-95 text-base disabled:opacity-50">
+                {isRolling ? "分配中..." : "重新隨機分組"}
+              </button>
+              <button onClick={() => {
+                const csv = "\ufeff組別,成員\n" + groups.flatMap((g, i) => g.map(m => `第${i + 1}組,${m}`)).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `分組名單_${getLocalDateStr()}.csv`; link.click();
+              }} disabled={!groups.length} className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl font-bold border border-emerald-200 shadow-sm text-xs disabled:opacity-50">
+                <IconComp name="download" size={16} />
+              </button>
+              <button onClick={() => setViewMode('setting')} className="btn-setting-highlight p-2.5 rounded-xl shadow-md">
+                <IconComp name="settings" size={18} />
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col h-full gap-2 bg-white p-2 text-xs overflow-hidden font-bold text-slate-800">
+          {globalConfig?.classes?.length > 0 && (
+            <div className="flex items-center gap-2 p-1.5 bg-blue-50/80 rounded-xl border border-blue-200 flex-shrink-0">
+              <span className="text-[11px] font-black text-blue-700 whitespace-nowrap">班級：</span>
+              <select
+                className="flex-1 bg-white border border-blue-300 rounded-lg p-1 font-bold text-xs outline-none text-slate-800"
+                value={data.selectedClassId || ""}
+                onChange={(e) => {
+                  const clsId = Number(e.target.value);
+                  const cls = globalConfig.classes.find(c => c.id === clsId);
+                  if (cls) {
+                    const names = (cls.students || []).map(s => s.name);
+                    onUpdate({ data: { ...data, selectedClassId: clsId, list: names.join('\n') } });
+                  }
+                }}
+              >
+                <option value="" disabled>-- 選擇班級 --</option>
+                {globalConfig.classes.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.students?.length || 0}人)</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex flex-col flex-grow gap-1 min-h-0">
+            <span className="text-[10px] text-slate-500 font-bold">參與分組成員 (每行一人)：</span>
+            <textarea className="flex-grow border rounded-xl p-2 text-xs resize-none outline-none focus:ring-2 focus:ring-blue-400 font-bold" value={data.list || ""} onChange={e => onUpdate({ data: { ...data, list: e.target.value } })} placeholder="每名學生佔一行..." />
+          </div>
+
+          <div className="flex gap-2 items-center bg-slate-100 p-2 rounded-xl border flex-shrink-0">
+            <span className="font-bold text-xs">分組邏輯：</span>
+            <button onClick={() => onUpdate({ data: { ...data, mode: 'byCount' } })} className={`flex-1 py-1 rounded-lg ${data.mode !== 'bySize' ? 'bg-blue-600 text-white font-black' : 'bg-slate-200 text-slate-600'}`}>依組數</button>
+            <button onClick={() => onUpdate({ data: { ...data, mode: 'bySize' } })} className={`flex-1 py-1 rounded-lg ${data.mode === 'bySize' ? 'bg-blue-600 text-white font-black' : 'bg-slate-200 text-slate-600'}`}>依每組人數</button>
+          </div>
+
+          <div className="flex justify-between items-center bg-slate-100 p-2 rounded-xl border flex-shrink-0">
+            <span className="font-bold text-xs">{data.mode === 'bySize' ? '每組幾人' : '要分幾組'}</span>
+            <input type="number" min="1" className="w-16 border rounded p-1 text-center font-black bg-white" value={data.value || 4} onChange={e => onUpdate({ data: { ...data, value: parseInt(e.target.value) || 1 } })} />
+          </div>
+
+          <button onClick={handleGroup} style={{ backgroundColor: theme.accent }} className="w-full text-white py-2.5 rounded-xl font-black shadow-md flex-shrink-0">開始分組</button>
+        </div>
+      );
+    }
+
     function ScoreKeeperTool({ data, onUpdate, globalConfig, theme }) {
       const state = useMemo(() => data || { logs: [], currentClassId: globalConfig?.classes?.[0]?.id || null }, [data, globalConfig?.classes]);
       const [view, setView] = useState('main');
@@ -349,7 +467,6 @@
       );
     }
 
-    // --- 2. 時鐘工具 ---
     function ClockTool({ data, onUpdate, theme, width, height }) {
       const [now, setNow] = useState(new Date());
       const [isSetting, setIsSetting] = useState(false);
@@ -402,7 +519,6 @@
       );
     }
 
-    // --- 3. 圖片選圖助手 ---
     function PhotoLottery({ data, onUpdate, width, height, theme }) {
       const [viewMode, setViewMode] = useState('result');
       const [showMgr, setShowMgr] = useState('input');
@@ -411,14 +527,13 @@
       const [rollingImg, setRollingImg] = useState([]);
       const fileRef = useRef(null);
 
-      // 圖片壓縮輔助函式（防止超大圖檔造成 LocalStorage 與 State 記憶體崩潰）
       const compressImage = (file) => {
         return new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-              const maxDim = 800;
+              const maxDim = 500;
               let w = img.width, h = img.height;
               if (w > maxDim || h > maxDim) {
                 if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
@@ -428,10 +543,9 @@
               canvas.width = w; canvas.height = h;
               const ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0, w, h);
-              // 判斷是否為透明圖檔格式 (PNG, WebP, GIF, SVG)，是則導出為 PNG 以保留透明背景
               const isTransparent = file.type && (file.type.includes('png') || file.type.includes('webp') || file.type.includes('gif') || file.type.includes('svg'));
               const mimeType = isTransparent ? 'image/png' : 'image/jpeg';
-              resolve(canvas.toDataURL(mimeType, 0.8));
+              resolve(canvas.toDataURL(mimeType, 0.65));
             };
             img.onerror = () => resolve(e.target.result);
             img.src = e.target.result;
@@ -441,7 +555,6 @@
         });
       };
 
-      // 載入本地圖片或資料夾並轉換為優化後的 Base64 以供持久化保存
       const handleLocalFolder = async (e) => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
@@ -485,7 +598,6 @@
         }
       };
 
-      // 取得勾選且符合資格的圖片池
       const selectedIds = data.selectedPhotos || (data.photoList || []).map(p => p.id);
       const pool = (data.photoList || []).filter(i => selectedIds.includes(i.id) && (!data.exclude || !(data.winners || []).includes(i.id)));
 
@@ -507,20 +619,6 @@
             setIsRolling(false);
           }
         }, 100);
-      };
-
-      const toggleSelectPhoto = (id) => {
-        const current = data.selectedPhotos || (data.photoList || []).map(p => p.id);
-        const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
-        onUpdate({ data: { ...data, selectedPhotos: next } });
-      };
-
-      const selectAllPhotos = () => {
-        onUpdate({ data: { ...data, selectedPhotos: (data.photoList || []).map(p => p.id) } });
-      };
-
-      const deselectAllPhotos = () => {
-        onUpdate({ data: { ...data, selectedPhotos: [] } });
       };
 
       const handleReset = () => onUpdate({ data: { ...data, winners: [], currentPicked: null } });
@@ -564,12 +662,12 @@
                 <div className="flex flex-col gap-1.5 p-3 bg-blue-50/70 rounded-xl border border-dashed border-blue-200">
                   <span className="font-black text-blue-700 text-xs">載入圖片資料夾</span>
                   <button onClick={() => fileRef.current && fileRef.current.click()} disabled={isProcessing} className="w-full bg-white border-2 border-blue-200 text-blue-600 py-2 rounded-xl font-black shadow-sm hover:bg-blue-50 disabled:opacity-50">
-                    {isProcessing ? "正在讀取與處理圖片中..." : "選擇資料夾 / 多張圖片"}
+                    {isProcessing ? "正在讀取圖片中..." : "選擇資料夾 / 多張圖片"}
                   </button>
                   <input type="file" ref={fileRef} className="hidden" webkitdirectory="true" directory="true" multiple onChange={handleLocalFolder} />
                   {data.folderPath && (
                     <div className="text-[10px] text-green-600 font-black truncate">
-                      已載入資料夾：{data.folderPath} (共 {data.photoList?.length || 0} 張圖片)
+                      已載入資料夾：{data.folderPath} (共 {data.photoList?.length || 0} 張)
                     </div>
                   )}
                 </div>
@@ -587,15 +685,19 @@
                 <div className="flex justify-between items-center px-1">
                   <span className="text-[11px] text-slate-500 font-bold">勾選參與抽取的圖片：</span>
                   <div className="flex gap-2">
-                    <button onClick={selectAllPhotos} className="text-blue-600 underline">全選</button>
-                    <button onClick={deselectAllPhotos} className="text-slate-500 underline">取消全選</button>
+                    <button onClick={() => onUpdate({ data: { ...data, selectedPhotos: (data.photoList || []).map(p => p.id) } })} className="text-blue-600 underline">全選</button>
+                    <button onClick={() => onUpdate({ data: { ...data, selectedPhotos: [] } })} className="text-slate-500 underline">取消全選</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 overflow-y-auto custom-scrollbar p-1 max-h-[220px]">
                   {(data.photoList || []).map((img) => {
                     const isChecked = selectedIds.includes(img.id);
                     return (
-                      <div key={img.id} onClick={() => toggleSelectPhoto(img.id)} className={`relative rounded-xl border-2 overflow-hidden cursor-pointer h-20 bg-slate-50 flex items-center justify-center transition-all ${isChecked ? 'border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 opacity-50'}`}>
+                      <div key={img.id} onClick={() => {
+                        const current = data.selectedPhotos || (data.photoList || []).map(p => p.id);
+                        const next = current.includes(img.id) ? current.filter(i => i !== img.id) : [...current, img.id];
+                        onUpdate({ data: { ...data, selectedPhotos: next } });
+                      }} className={`relative rounded-xl border-2 overflow-hidden cursor-pointer h-20 bg-slate-50 flex items-center justify-center transition-all ${isChecked ? 'border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200 opacity-50'}`}>
                         <img src={img.url} className="w-full h-full object-contain" />
                         <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow">
                           <input type="checkbox" checked={isChecked} readOnly className="w-3.5 h-3.5 pointer-events-none" />
@@ -618,7 +720,6 @@
       );
     }
 
-    // --- 4. 抽籤助手 ---
     function LotteryTool({ data, onUpdate, savedLists, onSaveList, onDeleteList, width, height, theme, globalConfig }) {
       const [viewMode, setViewMode] = useState('result');
       const [showMgr, setShowMgr] = useState('input');
@@ -649,9 +750,6 @@
         }, 100);
       };
 
-      const removeWinner = (targetName) => onUpdate({ data: { ...data, winners: (data.winners || []).filter(name => name !== targetName) } });
-      const handleReset = () => onUpdate({ data: { ...data, winners: [], currentPicked: null } });
-
       const displayItems = isRolling ? rollingNames : (data.currentPicked || []);
       const maxCols = (width > height * 1.05) ? 3 : 2;
       const currentCols = displayItems.length > 0 ? Math.min(displayItems.length, maxCols) : 1;
@@ -680,7 +778,7 @@
             </div>
             <div className="flex items-center gap-2 border-t p-2 bg-slate-50">
               <button onClick={handleDraw} disabled={isRolling} style={{ backgroundColor: isRolling ? '#94a3b8' : theme.accent }} className="flex-grow text-white font-black py-2.5 rounded-xl shadow active:scale-95 text-base">開始抽籤</button>
-              <button onClick={handleReset} className="p-2.5 bg-orange-100 text-orange-600 rounded-xl font-bold border border-orange-200 shadow-sm text-xs">重來</button>
+              <button onClick={() => onUpdate({ data: { ...data, winners: [], currentPicked: null } })} className="p-2.5 bg-orange-100 text-orange-600 rounded-xl font-bold border border-orange-200 shadow-sm text-xs">重來</button>
               <button onClick={() => !isRolling && setViewMode('edit')} className="btn-setting-highlight p-2.5 rounded-xl shadow-md"><IconComp name="settings" size={18} /></button>
             </div>
           </div>
@@ -727,14 +825,7 @@
                     </select>
                   </div>
                 )}
-                <textarea className="flex-grow border rounded-xl p-2 text-xs resize-none outline-none focus:ring-2 focus:ring-blue-400 font-bold" value={data.list || ""} onChange={e => onUpdate({ data: { ...data, list: e.target.value } })} placeholder="每列輸入一個名字，或從上方下拉選單載入班級..." />
-                <button onClick={() => setIsNaming(true)} className="text-[10px] text-blue-600 py-0.5 text-right font-black hover:underline flex-shrink-0">儲存此名單至本機</button>
-                {isNaming && (
-                  <div className="p-2 border rounded-xl bg-blue-50 mt-1 flex gap-1 flex-shrink-0">
-                    <input className="flex-grow border rounded-lg px-2 text-slate-800 bg-white font-bold text-xs" value={tempName} onChange={e => setTempName(e.target.value)} placeholder="輸入名稱" />
-                    <button onClick={() => { if (!tempName) return; onSaveList(tempName, data.list); setIsNaming(false); setTempName(""); }} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-black">存</button>
-                  </div>
-                )}
+                <textarea className="flex-grow border rounded-xl p-2 text-xs resize-none outline-none focus:ring-2 focus:ring-blue-400 font-bold" value={data.list || ""} onChange={e => onUpdate({ data: { ...data, list: e.target.value } })} placeholder="每列輸入一個名字..." />
               </div>
             )}
             {showMgr === 'select' && (
@@ -763,7 +854,7 @@
                   {(data.winners || []).map((name, i) => (
                     <div key={i} className="bg-white border rounded-lg px-2 py-1 text-[11px] shadow-sm flex items-center gap-1">
                       <span>{name}</span>
-                      <button onClick={() => removeWinner(name)} className="text-red-400 hover:text-red-600 ml-1 font-black">×</button>
+                      <button onClick={() => onUpdate({ data: { ...data, winners: (data.winners || []).filter(n => n !== name) } })} className="text-red-400 hover:text-red-600 ml-1 font-black">×</button>
                     </div>
                   ))}
                 </div>
@@ -775,7 +866,7 @@
                   <div key={l.id} className="flex items-center justify-between p-2 border-b text-xs text-slate-700 font-bold">
                     <span>{l.name}</span>
                     <div className="flex gap-1">
-                      <button onClick={() => onUpdate({ data: { ...data, list: l.content, selectedItems: l.content.split(/[\n\r]+/).map(s => s.trim()).filter(s => s) } })} className="text-blue-600 px-2 font-black">載入</button>
+                      <button onClick={() => onUpdate({ data: { ...data, list: l.content, selectedItems: l.content.split(/[\n\r]+/).map(s => s.trim()).filter(Boolean) } })} className="text-blue-600 px-2 font-black">載入</button>
                       <button onClick={() => onDeleteList(l.id)} className="text-red-400 p-1"><IconComp name="trash" size={14} /></button>
                     </div>
                   </div>
@@ -796,7 +887,6 @@
       );
     }
 
-    // --- 5. 計時器與碼錶 ---
     function TimerWidget({ data, onUpdate, width, height, theme }) {
       const state = data || { time: 60, mode: 'timer', status: 'idle' };
       const [left, setLeft] = useState(state.time);
@@ -852,7 +942,6 @@
       );
     }
 
-    // --- 6. 自訂骰子 ---
     function DiceTool({ data, onUpdate, width, height, theme }) {
       const [isSet, setIsSet] = useState(false);
       const [isShaking, setIsShaking] = useState(false);
@@ -878,7 +967,6 @@
 
       const dotMap = { 1:[4], 2:[0,8], 3:[0,4,8], 4:[0,2,6,8], 5:[0,2,4,6,8], 6:[0,3,6,2,5,8] };
 
-      // 動態根據畫框寬高計算骰子尺寸，隨圖框調整
       const count = configs.length;
       const availW = Math.max(100, width - 32);
       const availH = Math.max(100, height - 70);
@@ -938,11 +1026,16 @@
       );
     }
 
-    // --- 7. 塗鴉與畫框工具 ---
     function CanvasTool({ data, onUpdate, width, height }) {
       const cr = useRef(null);
       const [isDrawing, setIsDrawing] = useState(false);
       const customColors = data.customColors || COLORS_DEFAULT;
+
+      const saveCanvas = () => {
+        if (cr.current) {
+          onUpdate({ data: { ...data, savedUrl: cr.current.toDataURL() } });
+        }
+      };
 
       const applyCtxConfig = useCallback(() => {
         const c = cr.current; if (!c) return;
@@ -957,16 +1050,15 @@
         const tW = width - 32; const tH = height - 100;
         if (c.width !== tW || c.height !== tH) {
           const ctx = c.getContext('2d');
-          try {
-            const img = ctx.getImageData(0, 0, Math.max(1, c.width), Math.max(1, c.height));
-            c.width = tW; c.height = tH;
-            ctx.putImageData(img, 0, 0);
-          } catch (e) {
-            c.width = tW; c.height = tH;
+          c.width = tW; c.height = tH;
+          if (data.savedUrl) {
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.src = data.savedUrl;
           }
           applyCtxConfig();
         }
-      }, [width, height, applyCtxConfig]);
+      }, [width, height, applyCtxConfig, data.savedUrl]);
 
       useEffect(() => { applyCtxConfig(); }, [data.color, data.mode, data.lineWidth, applyCtxConfig]);
 
@@ -990,15 +1082,14 @@
             <div className="flex gap-2 items-center">
               <button onClick={() => onUpdate({ data: { ...data, mode: 'draw' } })} className={`p-1.5 rounded-lg ${data.mode === 'draw' ? 'bg-blue-600 text-white shadow' : 'text-slate-500'}`}><IconComp name="pencil" size={16} /></button>
               <button onClick={() => onUpdate({ data: { ...data, mode: 'eraser' } })} className={`p-1.5 rounded-lg ${data.mode === 'eraser' ? 'bg-blue-600 text-white shadow' : 'text-slate-500'}`}><IconComp name="eraser" size={16} /></button>
-              <button onClick={() => cr.current.getContext('2d').clearRect(0, 0, 9999, 9999)} className="text-slate-400 hover:text-red-500 p-1.5"><IconComp name="refresh" size={16} /></button>
+              <button onClick={() => { cr.current.getContext('2d').clearRect(0, 0, 9999, 9999); saveCanvas(); }} className="text-slate-400 hover:text-red-500 p-1.5"><IconComp name="refresh" size={16} /></button>
             </div>
           </div>
-          <canvas ref={cr} onMouseDown={(e) => { setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onMouseMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onMouseUp={() => setIsDrawing(false)} onTouchStart={(e) => { initAudioContext(); setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onTouchMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onTouchEnd={() => setIsDrawing(false)} className="bg-white border rounded-2xl flex-grow cursor-crosshair shadow-inner" />
+          <canvas ref={cr} onMouseDown={(e) => { setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onMouseMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onMouseUp={() => { setIsDrawing(false); saveCanvas(); }} onTouchStart={(e) => { initAudioContext(); setIsDrawing(true); const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x, y); }} onTouchMove={(e) => { if (!isDrawing) return; const { x, y } = getP(e); const ctx = cr.current.getContext('2d'); ctx.globalCompositeOperation = data.mode === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineTo(x, y); ctx.stroke(); }} onTouchEnd={() => { setIsDrawing(false); saveCanvas(); }} className="bg-white border rounded-2xl flex-grow cursor-crosshair shadow-inner" />
         </div>
       );
     }
 
-    // --- 8. 月曆記事 ---
     function CalendarTool({ data, onUpdate, width, height, theme }) {
       const v = parseDateStr(data.viewDate);
       const sDate = data.selectedDate || getLocalDateStr();
@@ -1048,7 +1139,6 @@
       );
     }
 
-    // --- 9. 數據表格與週課表 ---
     function DataTableTool({ data, onUpdate, isWeekly = false }) {
       const cfg = data || { r: isWeekly ? 8 : 4, c: isWeekly ? 5 : 3, cells: {} };
       const updateCfg = (upd) => onUpdate({ data: { ...cfg, ...upd } });
@@ -1093,7 +1183,6 @@
       );
     }
 
-    // --- 10. 文字筆記、圖片、QR碼與倒數日 ---
     function TextTool({ data, onUpdate }) {
       return (
         <div className="flex flex-col h-full gap-2 no-drag font-bold text-slate-800">
@@ -1160,13 +1249,13 @@
       );
     }
 
-    // --- 11. 小工具內容分發 ---
     function ToolContent(p) {
       const { tool, theme } = p;
       const commonProps = { ...p, data: tool.data || {}, theme };
       switch (tool.type) {
         case 'score': return <ScoreKeeperTool {...commonProps} />;
         case 'lottery': return <LotteryTool {...commonProps} />;
+        case 'grouping': return <GroupingTool {...commonProps} />;
         case 'photoLottery': return <PhotoLottery {...commonProps} />;
         case 'timer': return <TimerWidget {...commonProps} />;
         case 'dice': return <DiceTool {...commonProps} />;
@@ -1183,7 +1272,6 @@
       }
     }
 
-    // --- 12. 浮動視窗容器 ---
     function ToolContainer({ tool, onUpdate, onClose, ...extraProps }) {
       const [drag, setDrag] = useState(false);
       const [resize, setResize] = useState(false);
@@ -1273,7 +1361,6 @@
       );
     }
 
-    // --- 13. 主應用程式 ---
     const App = () => {
       const [isLoading, setIsLoading] = useState(true);
       const [windows, setWindows] = useState([{ id: 'win-1', title: '主工作區', tools: [], bg: { type: 'color', value: '#ffffff' }, favs: [] }]);
@@ -1285,13 +1372,13 @@
       const [savedLists, setSavedLists] = useState([]);
       const [editingWinId, setEditingWinId] = useState(null);
       const [confirmTabDelId, setConfirmTabDelId] = useState(null);
-      const [sidebarView, setSidebarView] = useState('tools'); // 'tools' | 'database'
+      const [sidebarView, setSidebarView] = useState('tools');
       const [editingClassId, setEditingClassId] = useState(null);
+      const [storageWarning, setStorageWarning] = useState(false);
       const bgInputRef = useRef(null);
 
-      // 本機讀取
       useEffect(() => {
-        const localData = localStorage.getItem('classroom_whiteboard_merged_v11');
+        const localData = localStorage.getItem('classroom_whiteboard_merged_v12');
         if (localData) {
           try {
             const parsed = JSON.parse(localData);
@@ -1304,29 +1391,28 @@
         setIsLoading(false);
       }, []);
 
-      // 自動存檔至 LocalStorage
       useEffect(() => {
         if (!isLoading) {
           try {
-            localStorage.setItem('classroom_whiteboard_merged_v11', JSON.stringify({ windows, activeId, globalConfig, savedLists }));
+            localStorage.setItem('classroom_whiteboard_merged_v12', JSON.stringify({ windows, activeId, globalConfig, savedLists }));
+            setStorageWarning(false);
           } catch (e) {
-            console.warn('LocalStorage 儲存提示: 檔案較大或配額滿', e);
+            console.warn('LocalStorage 配額已滿', e);
+            setStorageWarning(true);
           }
         }
       }, [windows, activeId, globalConfig, savedLists, isLoading]);
 
-      // 匯出完整 JSON 備份
       const handleBackupAll = () => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ windows, activeId, globalConfig, savedLists }, null, 2));
         const downloadAnchor = document.createElement('a');
         downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `小白板與經營資料備份_${getLocalDateStr()}.json`);
+        downloadAnchor.setAttribute("download", `小白板備份檔案_${getLocalDateStr()}.json`);
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
       };
 
-      // 匯入 JSON 備份檔
       const handleRestoreAll = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -1352,11 +1438,12 @@
       const addTool = (type) => {
         const today = getLocalDateStr();
         const defData = (t) => {
+          const firstCls = globalConfig?.classes?.[0];
+          const initialNames = firstCls ? (firstCls.students || []).map(s => s.name) : [];
+
           switch (t) {
-            case 'score': return { logs: [], currentClassId: globalConfig?.classes?.[0]?.id || null };
+            case 'score': return { logs: [], currentClassId: firstCls?.id || null };
             case 'lottery': {
-              const firstCls = globalConfig?.classes?.[0];
-              const initialNames = firstCls ? (firstCls.students || []).map(s => s.name) : [];
               return {
                 list: initialNames.join('\n'),
                 selectedClassId: firstCls?.id || null,
@@ -1367,10 +1454,19 @@
                 selectedItems: initialNames
               };
             }
+            case 'grouping': {
+              return {
+                list: initialNames.join('\n'),
+                selectedClassId: firstCls?.id || null,
+                mode: 'byCount',
+                value: 4,
+                groups: []
+              };
+            }
             case 'photoLottery': return { count: 1, exclude: true, winners: [], currentPicked: null, photoList: [], folderPath: '' };
             case 'timer': return { mode: 'timer', time: 60, status: 'idle' };
             case 'dice': return { configs: [{ type: 'dots', custom: '' }], results: [1] };
-            case 'pen': case 'canvas': return { color: '#ef4444', mode: 'draw', customColors: COLORS_DEFAULT, lineWidth: 4 };
+            case 'pen': case 'canvas': return { color: '#ef4444', mode: 'draw', customColors: COLORS_DEFAULT, lineWidth: 4, savedUrl: '' };
             case 'text': return { content: '', fontSize: 22, color: '#000000' };
             case 'countdown': return { title: '目標倒數', date: today };
             case 'clock': return { style: 'digital' };
@@ -1383,7 +1479,7 @@
           }
         };
 
-        const isLarge = ['calendar', 'dice', 'lottery', 'photoLottery', 'timetable', 'table', 'score'].includes(type);
+        const isLarge = ['calendar', 'dice', 'lottery', 'grouping', 'photoLottery', 'timetable', 'table', 'score'].includes(type);
         setWindows(prev => prev.map(w => w.id === activeId ? {
           ...w,
           tools: [...w.tools, {
@@ -1397,7 +1493,7 @@
       };
 
       const sortedToolTypes = useMemo(() => {
-        const base = ['score', 'lottery', 'photoLottery', 'timer', 'calendar', 'timetable', 'pen', 'text', 'dice', 'table', 'image', 'qr', 'countdown', 'clock'];
+        const base = ['score', 'lottery', 'grouping', 'photoLottery', 'timer', 'calendar', 'timetable', 'pen', 'text', 'dice', 'table', 'image', 'qr', 'countdown', 'clock'];
         const currentFavs = activeWin?.favs || [];
         return [...base].sort((a, b) => {
           const aFav = currentFavs.includes(a); const bFav = currentFavs.includes(b);
@@ -1460,6 +1556,14 @@
             </div>
           </header>
 
+          {/* 容量滿警告通知 */}
+          {storageWarning && (
+            <div className="bg-amber-500 text-slate-900 text-xs px-3 py-1 font-black flex justify-between items-center z-50 shadow-md">
+              <span>⚠️ 瀏覽器本機快取空間已滿！請點擊右上方「備份全站」下載資料備份。</span>
+              <button onClick={() => setStorageWarning(false)} className="text-slate-900 font-black">✕</button>
+            </div>
+          )}
+
           <main className="flex-grow flex relative overflow-hidden">
             {/* 側邊工具與資料庫抽屜 */}
             <aside className="w-14 bg-slate-800 border-r border-slate-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 z-20 shadow-lg custom-scrollbar">
@@ -1481,11 +1585,11 @@
               )}
 
               <div className="mt-auto pt-4 flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
-                <span className="text-[9px] text-blue-400 font-black">v11.0</span>
+                <span className="text-[9px] text-blue-400 font-black">v12.0</span>
               </div>
             </aside>
 
-            {/* 資料庫與班級設定抽屜內頁 */}
+            {/* 資料庫抽屜內頁 */}
             {sidebarView === 'database' && (
               <div className="w-72 bg-slate-800 border-r border-slate-700 p-3 overflow-y-auto custom-scrollbar z-20 animate-pop text-xs font-bold text-slate-200">
                 <div className="flex justify-between items-center border-b border-slate-700 pb-2 mb-3">
@@ -1494,7 +1598,6 @@
                 </div>
 
                 <div className="space-y-4">
-                  {/* 班級名單編輯 */}
                   <div>
                     <div className="text-slate-400 mb-1 text-[10px] uppercase font-black">班級列表 (點擊編輯學生)</div>
                     <div className="space-y-2">
@@ -1523,7 +1626,6 @@
                     </div>
                   </div>
 
-                  {/* 全域加減分標準 */}
                   <div className="border-t border-slate-700 pt-3">
                     <div className="text-slate-400 mb-1 text-[10px] uppercase font-black">加減分評分項目</div>
                     <div className="space-y-1.5">
@@ -1550,7 +1652,6 @@
             </div>
           </main>
 
-          {/* 刪除分頁確認對話框 */}
           <CustomConfirm show={!!confirmTabDelId} title="刪除分頁？" message="確定要移除此工作區？頁面內的小工具將一併刪除。" onConfirm={() => { setWindows(prev => prev.filter(w => w.id !== confirmTabDelId)); if (activeId === confirmTabDelId && windows.length > 1) setActiveId(windows.find(w => w.id !== confirmTabDelId).id); setConfirmTabDelId(null); }} onCancel={() => setConfirmTabDelId(null)} />
         </div>
       );
