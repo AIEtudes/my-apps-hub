@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP3 音訊自動分頁與切片工坊</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f5ff',
+                            100: '#e5edff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- JSZip for ZIP compression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- LameJS for MP3 Encoding -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
+    <style>
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col">
+
+    <!-- Top Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                <i class="fa-solid font-bold fa-scissors text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">MP3 音訊自動分頁與切片工坊</h1>
+                <p class="text-xs text-slate-400">智慧靜音偵測 • 時間微調 • 勾選合併 • 拆分 • 打包下載</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span id="audioStatusBadge" class="hidden px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <i class="fa-solid fa-circle-check mr-1"></i> 已載入音訊
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+        <!-- File Upload Area -->
+        <section id="uploadSection" class="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-900/50 hover:bg-slate-900 transition-all rounded-2xl p-8 text-center cursor-pointer relative group">
+            <input type="file" id="audioFileInput" accept=".mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,audio/*" class="hidden">
+            <div class="flex flex-col items-center justify-center space-y-4">
+                <div class="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-blue-600/20 flex items-center justify-center text-slate-400 group-hover:text-blue-400 transition-all">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                </div>
+                <div>
+                    <p class="text-lg font-semibold text-slate-200">拖曳合併的 MP3 / 音訊檔案至此，或 <span class="text-blue-400 hover:underline">點擊選擇檔案</span></p>
+                    <p class="text-sm text-slate-400 mt-1">支援格式：MP3, WAV, AAC, OGG, M4A, FLAC（完全在本地端處理，保護隱私）</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workspace (Hidden by default until file is loaded) -->
+        <div id="workspace" class="hidden space-y-6">
+            
+            <!-- Silence Detection & Controls Panel -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-sliders text-blue-400"></i>
+                        <h2 class="text-md font-bold text-slate-200">智慧靜音分割設定</h2>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button id="btnAutoSplit" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-xl text-sm transition-all shadow-md shadow-blue-600/30 flex items-center space-x-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>重新靜音檢測</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Threshold slider & direct input -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <label class="text-slate-300 font-medium">靜音判定臨界值 (dB)</label>
+                            <div class="flex items-center space-x-1">
+                                <input type="number" id="thresholdInput" min="-70" max="-20" step="1" value="-45" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-blue-400 text-xs focus:outline-none focus:border-blue-500">
+                                <span class="text-slate-400 font-semibold">dB</span>
+                            </div>
+                        </div>
+                        <input type="range" id="thresholdSlider" min="-70" max="-20" step="1" value="-45" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2">
+                        <p class="text-xs text-slate-500">數值越小代表判定越嚴格（極小聲才算靜音）</p>
+                    </div>
+
+                    <!-- Min silence duration & direct input -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <label class="text-slate-300 font-medium">最短靜音長度 (秒)</label>
+                            <div class="flex items-center space-x-1">
+                                <input type="number" id="minSilenceInput" min="0.1" max="10" step="0.1" value="0.8" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-blue-400 text-xs focus:outline-none focus:border-blue-500">
+                                <span class="text-slate-400 font-semibold">s</span>
+                            </div>
+                        </div>
+                        <input type="range" id="minSilenceSlider" min="0.2" max="3.0" step="0.1" value="0.8" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2">
+                        <p class="text-xs text-slate-500">低於臨界值連續持續多久才裁切</p>
+                    </div>
+
+                    <!-- Min track duration & direct input -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <label class="text-slate-300 font-medium">最短單軌長度 (秒)</label>
+                            <div class="flex items-center space-x-1">
+                                <input type="number" id="minTrackInput" min="0.5" max="60" step="0.5" value="3.0" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-blue-400 text-xs focus:outline-none focus:border-blue-500">
+                                <span class="text-slate-400 font-semibold">s</span>
+                            </div>
+                        </div>
+                        <input type="range" id="minTrackSlider" min="1.0" max="20.0" step="0.5" value="3.0" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2">
+                        <p class="text-xs text-slate-500">過短的雜訊或噪音段落將被忽略</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waveform Preview Box -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2 text-slate-300 text-sm font-semibold">
+                        <i class="fa-solid fa-chart-simple text-indigo-400"></i>
+                        <span>全音軌波形與切點預覽</span>
+                    </div>
+                    <div id="audioInfoText" class="text-xs text-slate-400">
+                        總長度：00:00 | 採樣率：44100Hz
+                    </div>
+                </div>
+
+                <!-- Canvas Waveform Wrapper -->
+                <div class="relative w-full h-36 bg-slate-950 rounded-xl overflow-hidden border border-slate-800 group">
+                    <canvas id="waveformCanvas" class="w-full h-full cursor-pointer"></canvas>
+                    <div id="canvasPlayhead" class="absolute top-0 bottom-0 w-0.5 bg-yellow-400 pointer-events-none hidden"></div>
+                </div>
+                <p class="text-xs text-slate-500 flex justify-between">
+                    <span>💡 提示：紅虛線為目前自動/手動劃分的音軌邊界</span>
+                    <span>點擊波形圖可移動試聽位置</span>
+                </p>
+            </div>
+
+            <!-- Track List & Manual Editing Tools -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                
+                <!-- Batch Action Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <!-- Left: Batch Actions -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button id="btnSelectAll" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700">
+                            <i class="fa-regular fa-square-check mr-1"></i> 全選 / 取消
+                        </button>
+                        
+                        <button id="btnMergeSelected" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-object-group"></i>
+                            <span>合併勾選段落</span>
+                        </button>
+
+                        <button id="btnAddSegment" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-emerald-600/30 transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>新增手動分段</span>
+                        </button>
+                    </div>
+
+                    <!-- Right: Naming & Counters -->
+                    <div class="flex items-center space-x-2.5">
+                        <span class="text-xs text-slate-300 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg font-mono shadow-inner">
+                            總段數：<span id="totalSegmentsCount" class="font-bold text-blue-400">0</span> 段
+                        </span>
+                        <span class="text-xs text-slate-400">批量命名：</span>
+                        <input type="text" id="batchPrefixInput" value="Track_" placeholder="例如：Track_" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 w-28 focus:outline-none focus:border-blue-500">
+                        <button id="btnApplyBatchName" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium border border-slate-700">
+                            套用
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table of Segments -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-800 bg-slate-950/40">
+                                <th class="p-3 w-10 text-center">
+                                    <input type="checkbox" id="selectAllCheckbox" class="rounded accent-blue-500 cursor-pointer">
+                                </th>
+                                <th class="p-3 w-12 text-center">#</th>
+                                <th class="p-3 min-w-[140px]">曲目名稱 (點擊修改)</th>
+                                <th class="p-3 w-28 text-center">起始時間 (秒)</th>
+                                <th class="p-3 w-28 text-center">結束時間 (秒)</th>
+                                <th class="p-3 w-20 text-center">時長</th>
+                                <th class="p-3 w-20 text-center">預聽</th>
+                                <th class="p-3 w-24 text-center" title="操作說明：點擊分支圖示可將該段落從正中間一分為二，垃圾桶圖示可刪除">操作 (拆分 / 刪除)</th>
+                                <th class="p-3 w-20 text-center">下載單檔</th>
+                            </tr>
+                        </thead>
+                        <tbody id="segmentTableBody" class="divide-y divide-slate-800/60">
+                            <!-- JS Dynamically Populates Segment Rows Here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Export Controls -->
+                <div class="flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 pt-4 mt-4">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs text-slate-400">導出格式：</span>
+                        <label class="inline-flex items-center text-xs text-slate-200 cursor-pointer">
+                            <input type="radio" name="exportFormat" value="mp3" checked class="accent-blue-500">
+                            <span class="ml-1.5 font-medium">MP3</span>
+                        </label>
+                        <label class="inline-flex items-center text-xs text-slate-200 cursor-pointer">
+                            <input type="radio" name="exportFormat" value="wav" class="accent-blue-500">
+                            <span class="ml-1.5 font-medium">WAV (無損)</span>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <button id="btnExportSelectedZip" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-2">
+                            <i class="fa-solid fa-file-zipper text-amber-400"></i>
+                            <span>打包下載勾選項目 ZIP</span>
+                        </button>
+                        <button id="btnExportAllZip" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all flex items-center space-x-2">
+                            <i class="fa-solid fa-download"></i>
+                            <span>打包下載全部分割檔 (ZIP)</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Loading & Processing Modal Overlay -->
+        <div id="loadingModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
+                <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <div class="space-y-1">
+                    <h3 id="modalTitle" class="text-slate-200 font-bold text-md">處理中...</h3>
+                    <p id="modalDetail" class="text-slate-400 text-xs">正在編碼與生成檔案，請稍候...</p>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div id="modalProgressBar" class="bg-blue-500 h-full w-0 transition-all duration-150"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-400 space-y-2 bg-slate-950">
+        <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <span class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md text-slate-300">
+                <i class="fa-solid fa-code-branch text-blue-400 mr-1.5"></i>版本資訊：v1.2.0
+            </span>
+            <span class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md text-slate-300">
+                <i class="fa-solid fa-wand-magic-sparkles text-indigo-400 mr-1.5"></i>製作：AI練習曲
+            </span>
+            <span class="bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md text-amber-400 font-medium">
+                <i class="fa-solid fa-heart mr-1.5"></i>歡迎分享，請勿商用
+            </span>
+            <span class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md text-slate-400">
+                <i class="fa-regular fa-clock mr-1.5"></i>Updated: 2026-08-30
+            </span>
+        </div>
+        <p class="text-slate-600 text-[11px] pt-1">MP3 Audio Auto Splitter Workspace &copy; Web Audio API Client Processing</p>
+    </footer>
+
+    <script>
+        // Global Application State
+        let audioContext = null;
+        let originalAudioBuffer = null;
+        let audioFileName = 'audio_split';
+        let segments = []; // Array of objects: { id, name, startTime, endTime, selected }
+        let currentPlayingSource = null;
+        let isPlaying = false;
+        let playingSegmentId = null;
+
+        // DOM Element References
+        const uploadSection = document.getElementById('uploadSection');
+        const audioFileInput = document.getElementById('audioFileInput');
+        const workspace = document.getElementById('workspace');
+        const audioStatusBadge = document.getElementById('audioStatusBadge');
+        const canvas = document.getElementById('waveformCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasPlayhead = document.getElementById('canvasPlayhead');
+        const audioInfoText = document.getElementById('audioInfoText');
+        const segmentTableBody = document.getElementById('segmentTableBody');
+
+        // Buttons & Inputs
+        const btnAutoSplit = document.getElementById('btnAutoSplit');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const btnSelectAll = document.getElementById('btnSelectAll');
+        const btnMergeSelected = document.getElementById('btnMergeSelected');
+        const btnAddSegment = document.getElementById('btnAddSegment');
+        const batchPrefixInput = document.getElementById('batchPrefixInput');
+        const btnApplyBatchName = document.getElementById('btnApplyBatchName');
+        const btnExportSelectedZip = document.getElementById('btnExportSelectedZip');
+        const btnExportAllZip = document.getElementById('btnExportAllZip');
+
+        // Modal Elements
+        const loadingModal = document.getElementById('loadingModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDetail = document.getElementById('modalDetail');
+        const modalProgressBar = document.getElementById('modalProgressBar');
+
+        // Sliders & Number Inputs
+        const thresholdSlider = document.getElementById('thresholdSlider');
+        const minSilenceSlider = document.getElementById('minSilenceSlider');
+        const minTrackSlider = document.getElementById('minTrackSlider');
+        const thresholdInput = document.getElementById('thresholdInput');
+        const minSilenceInput = document.getElementById('minSilenceInput');
+        const minTrackInput = document.getElementById('minTrackInput');
+
+        // Upload click handler
+        uploadSection.addEventListener('click', () => {
+            audioFileInput.click();
+        });
+
+        // File input change handler
+        audioFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFileSelect(e.target.files[0]);
+                e.target.value = ''; // Reset file input
+            }
+        });
+
+        // Drag & Drop handlers
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.classList.add('border-blue-500', 'bg-blue-900/40');
+        });
+
+        uploadSection.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.classList.remove('border-blue-500', 'bg-blue-900/40');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadSection.classList.remove('border-blue-500', 'bg-blue-900/40');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Canvas Waveform Seek Click Handler
+        canvas.addEventListener('click', (e) => {
+            if (!originalAudioBuffer) return;
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percent = clickX / rect.width;
+            const targetTime = percent * originalAudioBuffer.duration;
+
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            stopPlayback();
+            const source = audioContext.createBufferSource();
+            source.buffer = originalAudioBuffer;
+            source.connect(audioContext.destination);
+            source.start(0, targetTime);
+            currentPlayingSource = source;
+            isPlaying = true;
+
+            source.onended = () => {
+                isPlaying = false;
+                currentPlayingSource = null;
+            };
+        });
+
+        // Sliders & Direct Input bidirectional sync
+        thresholdSlider.addEventListener('input', (e) => thresholdInput.value = e.target.value);
+        thresholdInput.addEventListener('input', (e) => thresholdSlider.value = e.target.value);
+
+        minSilenceSlider.addEventListener('input', (e) => minSilenceInput.value = e.target.value);
+        minSilenceInput.addEventListener('input', (e) => minSilenceSlider.value = e.target.value);
+
+        minTrackSlider.addEventListener('input', (e) => minTrackInput.value = e.target.value);
+        minTrackInput.addEventListener('input', (e) => minTrackSlider.value = e.target.value);
+
+        btnAutoSplit.addEventListener('click', () => {
+            if (originalAudioBuffer) {
+                runSilenceDetection();
+            }
+        });
+
+        // Select All Checkbox Handler
+        selectAllCheckbox.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            segments.forEach(s => s.selected = checked);
+            renderSegmentsTable();
+            drawWaveform();
+        });
+
+        btnSelectAll.addEventListener('click', () => {
+            const allSelected = segments.every(s => s.selected);
+            segments.forEach(s => s.selected = !allSelected);
+            selectAllCheckbox.checked = !allSelected;
+            renderSegmentsTable();
+            drawWaveform();
+        });
+
+        // Merge Selected Segments Handler
+        btnMergeSelected.addEventListener('click', mergeSelectedSegments);
+
+        // Add Manual Split Segment
+        btnAddSegment.addEventListener('click', () => {
+            if (!originalAudioBuffer) return;
+            const duration = originalAudioBuffer.duration;
+            const lastEnd = segments.length > 0 ? segments[segments.length - 1].endTime : 0;
+            if (lastEnd < duration) {
+                segments.push({
+                    id: generateId(),
+                    name: `Track_${String(segments.length + 1).padStart(2, '0')}`,
+                    startTime: lastEnd,
+                    endTime: duration,
+                    selected: false
+                });
+            } else if (segments.length > 0) {
+                // Split the last track in half if at end
+                const last = segments[segments.length - 1];
+                const mid = (last.startTime + last.endTime) / 2;
+                const oldEnd = last.endTime;
+                last.endTime = Number(mid.toFixed(2));
+                segments.push({
+                    id: generateId(),
+                    name: `Track_${String(segments.length + 1).padStart(2, '0')}`,
+                    startTime: Number(mid.toFixed(2)),
+                    endTime: oldEnd,
+                    selected: false
+                });
+            }
+            renderSegmentsTable();
+            drawWaveform();
+        });
+
+        // Apply Batch Renaming
+        btnApplyBatchName.addEventListener('click', () => {
+            const prefix = batchPrefixInput.value.trim() || 'Track_';
+            segments.forEach((seg, idx) => {
+                seg.name = `${prefix}${String(idx + 1).padStart(2, '0')}`;
+            });
+            renderSegmentsTable();
+        });
+
+        // Export Actions
+        btnExportSelectedZip.addEventListener('click', () => exportSegmentsZip(true));
+        btnExportAllZip.addEventListener('click', () => exportSegmentsZip(false));
+
+        // File handling and decoding
+        async function handleFileSelect(file) {
+            const isAudioExt = file.name.match(/\.(mp3|wav|m4a|aac|ogg|flac|wma)$/i);
+            const isAudioMime = file.type && file.type.startsWith('audio/');
+
+            if (!isAudioExt && !isAudioMime) {
+                showModal('錯誤', '請選擇有效的音訊檔案 (MP3, WAV, M4A 等)', 0, false);
+                setTimeout(hideModal, 2000);
+                return;
+            }
+
+            audioFileName = file.name.replace(/\.[^/.]+$/, "");
+            showModal('讀取檔案中', '正在解碼音訊資料，大型檔案可能需要幾秒鐘...', 20);
+
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                const arrayBuffer = await file.arrayBuffer();
+                showModal('解析波形中', '正在進行 Web Audio 解碼...', 60);
+
+                audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                    originalAudioBuffer = buffer;
+                    hideModal();
+                    
+                    // Show Workspace UI
+                    uploadSection.classList.add('hidden');
+                    workspace.classList.remove('hidden');
+                    audioStatusBadge.classList.remove('hidden');
+
+                    audioInfoText.innerText = `總長度：${formatTime(buffer.duration)} | 採樣率：${buffer.sampleRate}Hz | 聲道：${buffer.numberOfChannels}`;
+
+                    // Run automatic initial detection
+                    runSilenceDetection();
+                    
+                    // Resize canvas properly
+                    resizeCanvas();
+                    window.addEventListener('resize', () => {
+                        resizeCanvas();
+                        drawWaveform();
+                    });
+                }, (err) => {
+                    console.error('Audio decode error:', err);
+                    showModal('解碼失敗', '無法解碼此音訊檔案，請確認格式是否損壞。', 0, false);
+                    setTimeout(hideModal, 2500);
+                });
+
+            } catch (err) {
+                console.error(err);
+                showModal('載入失敗', '讀取檔案時發生錯誤。', 0, false);
+                setTimeout(hideModal, 2500);
+            }
+        }
+
+        // Automatic Silence Detection Algorithm
+        function runSilenceDetection() {
+            if (!originalAudioBuffer) return;
+
+            showModal('自動檢測中', '正在分析波形能量並搜尋靜音區段...', 50);
+
+            setTimeout(() => {
+                const dbThreshold = parseFloat(thresholdInput.value);
+                const minSilence = parseFloat(minSilenceInput.value);
+                const minTrack = parseFloat(minTrackInput.value);
+
+                const thresholdLinear = Math.pow(10, dbThreshold / 20);
+                const channelData = originalAudioBuffer.getChannelData(0); // Left channel
+                const sampleRate = originalAudioBuffer.sampleRate;
+                const windowSize = Math.floor(sampleRate * 0.02); // 20ms window
+                const totalSamples = channelData.length;
+
+                let isSilent = false;
+                let silenceStart = 0;
+                let splitPoints = [0];
+
+                for (let i = 0; i < totalSamples; i += windowSize) {
+                    let sum = 0;
+                    const end = Math.min(i + windowSize, totalSamples);
+                    for (let j = i; j < end; j++) {
+                        sum += channelData[j] * channelData[j];
+                    }
+                    const rms = Math.sqrt(sum / (end - i));
+                    const currentTime = i / sampleRate;
+
+                    if (rms < thresholdLinear) {
+                        if (!isSilent) {
+                            isSilent = true;
+                            silenceStart = currentTime;
+                        }
+                    } else {
+                        if (isSilent) {
+                            isSilent = false;
+                            const silenceDuration = currentTime - silenceStart;
+                            if (silenceDuration >= minSilence) {
+                                const splitTime = silenceStart + (silenceDuration / 2);
+                                const lastSplitPoint = splitPoints[splitPoints.length - 1];
+                                
+                                if (splitTime - lastSplitPoint >= minTrack) {
+                                    splitPoints.push(Number(splitTime.toFixed(2)));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const totalDuration = originalAudioBuffer.duration;
+                if (totalDuration - splitPoints[splitPoints.length - 1] < minTrack && splitPoints.length > 1) {
+                    // Ignore last split if too short
+                } else {
+                    splitPoints.push(Number(totalDuration.toFixed(2)));
+                }
+
+                // Construct Segment Objects
+                segments = [];
+                for (let k = 0; k < splitPoints.length - 1; k++) {
+                    const start = splitPoints[k];
+                    const end = splitPoints[k + 1];
+                    if (end - start >= 0.2) {
+                        segments.push({
+                            id: generateId(),
+                            name: `Track_${String(segments.length + 1).padStart(2, '0')}`,
+                            startTime: start,
+                            endTime: end,
+                            selected: false
+                        });
+                    }
+                }
+
+                renderSegmentsTable();
+                drawWaveform();
+                hideModal();
+            }, 100);
+        }
+
+        // Render Segment Table HTML with sleek compact time steppers
+        function renderSegmentsTable() {
+            segmentTableBody.innerHTML = '';
+
+            // Update total segments counter at the top
+            const totalCountEl = document.getElementById('totalSegmentsCount');
+            if (totalCountEl) {
+                totalCountEl.innerText = segments.length;
+            }
+
+            segments.forEach((seg, index) => {
+                const duration = Math.max(0, seg.endTime - seg.startTime);
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-slate-800/50 transition-colors ${seg.selected ? 'bg-blue-900/20' : ''}`;
+
+                tr.innerHTML = `
+                    <td class="p-3 text-center">
+                        <input type="checkbox" class="seg-checkbox rounded accent-blue-500 cursor-pointer" data-id="${seg.id}" ${seg.selected ? 'checked' : ''}>
+                    </td>
+                    <td class="p-3 text-center font-mono text-slate-400">${index + 1}</td>
+                    <td class="p-3">
+                        <input type="text" class="seg-name-input bg-transparent hover:bg-slate-950/60 focus:bg-slate-950 border border-transparent focus:border-slate-700 rounded px-2 py-1 text-slate-200 font-medium w-full transition-all focus:outline-none" data-id="${seg.id}" value="${escapeHtml(seg.name)}">
+                    </td>
+                    <td class="p-3 font-mono">
+                        <div class="relative flex items-center bg-slate-950 border border-slate-800 rounded-lg overflow-hidden w-28 mx-auto focus-within:border-blue-500">
+                            <input type="number" step="0.01" class="seg-time-input bg-transparent px-1.5 py-1 text-slate-100 font-mono w-full text-xs text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" data-id="${seg.id}" data-type="start" value="${seg.startTime.toFixed(2)}" title="調整此處會同步修改上一段的結束時間">
+                            <div class="flex flex-col border-l border-slate-800 bg-slate-900/60 divide-y divide-slate-800/80">
+                                <button class="btn-time-step hover:bg-blue-600 hover:text-white text-slate-400 px-1.5 py-0.5 text-[8px] leading-none transition-colors flex items-center justify-center h-3" data-id="${seg.id}" data-type="start" data-delta="0.1" title="增加0.1秒 (按Shift點擊+0.5秒)">
+                                    <i class="fa-solid fa-chevron-up"></i>
+                                </button>
+                                <button class="btn-time-step hover:bg-blue-600 hover:text-white text-slate-400 px-1.5 py-0.5 text-[8px] leading-none transition-colors flex items-center justify-center h-3" data-id="${seg.id}" data-type="start" data-delta="-0.1" title="減少0.1秒 (按Shift點擊-0.5秒)">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3 font-mono">
+                        <div class="relative flex items-center bg-slate-950 border border-slate-800 rounded-lg overflow-hidden w-28 mx-auto focus-within:border-blue-500">
+                            <input type="number" step="0.01" class="seg-time-input bg-transparent px-1.5 py-1 text-slate-100 font-mono w-full text-xs text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" data-id="${seg.id}" data-type="end" value="${seg.endTime.toFixed(2)}" title="調整此處會同步修改下一段的起始時間">
+                            <div class="flex flex-col border-l border-slate-800 bg-slate-900/60 divide-y divide-slate-800/80">
+                                <button class="btn-time-step hover:bg-blue-600 hover:text-white text-slate-400 px-1.5 py-0.5 text-[8px] leading-none transition-colors flex items-center justify-center h-3" data-id="${seg.id}" data-type="end" data-delta="0.1" title="增加0.1秒 (按Shift點擊+0.5秒)">
+                                    <i class="fa-solid fa-chevron-up"></i>
+                                </button>
+                                <button class="btn-time-step hover:bg-blue-600 hover:text-white text-slate-400 px-1.5 py-0.5 text-[8px] leading-none transition-colors flex items-center justify-center h-3" data-id="${seg.id}" data-type="end" data-delta="-0.1" title="減少0.1秒 (按Shift點擊-0.5秒)">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3 text-center font-mono text-slate-300">
+                        ${formatTime(duration)}
+                    </td>
+                    <td class="p-3 text-center">
+                        <button class="btn-play-seg bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white p-2 rounded-lg transition-all" data-id="${seg.id}" title="預聽此區段">
+                            <i class="fa-solid ${isPlaying && playingSegmentId === seg.id ? 'fa-square' : 'fa-play'}"></i>
+                        </button>
+                    </td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center space-x-1">
+                            <button class="btn-split-seg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white p-2 rounded-lg transition-all" data-id="${seg.id}" title="一分為二：將此段落從中間拆分為兩段">
+                                <i class="fa-solid fa-code-branch"></i>
+                            </button>
+                            <button class="btn-delete-seg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white p-2 rounded-lg transition-all" data-id="${seg.id}" title="刪除此段落">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button class="btn-download-single bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg transition-all" data-id="${seg.id}" title="單檔導出">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </td>
+                `;
+
+                segmentTableBody.appendChild(tr);
+            });
+
+            attachSegmentTableEvents();
+        }
+
+        // Attach Dynamic Event Listeners to Table Controls
+        function attachSegmentTableEvents() {
+            // Checkboxes
+            document.querySelectorAll('.seg-checkbox').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    const seg = segments.find(s => s.id === id);
+                    if (seg) seg.selected = e.target.checked;
+                    drawWaveform();
+                });
+            });
+
+            // Name inputs
+            document.querySelectorAll('.seg-name-input').forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    const seg = segments.find(s => s.id === id);
+                    if (seg) seg.name = e.target.value;
+                });
+            });
+
+            // Time Inputs (Direct typing, keyboard & scroll adjustment)
+            document.querySelectorAll('.seg-time-input').forEach(inp => {
+                inp.addEventListener('change', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    const type = e.target.getAttribute('data-type');
+                    const val = parseFloat(e.target.value) || 0;
+                    updateSegmentTime(id, type, val);
+                });
+
+                // Mouse wheel adjustment
+                inp.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const id = inp.getAttribute('data-id');
+                    const type = inp.getAttribute('data-type');
+                    const step = e.shiftKey ? 0.5 : 0.1;
+                    const delta = e.deltaY < 0 ? step : -step;
+                    const seg = segments.find(s => s.id === id);
+                    if (seg) {
+                        const current = type === 'start' ? seg.startTime : seg.endTime;
+                        updateSegmentTime(id, type, current + delta);
+                    }
+                }, { passive: false });
+
+                // Keyboard Arrow Up / Down
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const id = inp.getAttribute('data-id');
+                        const type = inp.getAttribute('data-type');
+                        const step = e.shiftKey ? 0.5 : 0.1;
+                        const delta = e.key === 'ArrowUp' ? step : -step;
+                        const seg = segments.find(s => s.id === id);
+                        if (seg) {
+                            const current = type === 'start' ? seg.startTime : seg.endTime;
+                            updateSegmentTime(id, type, current + delta);
+                        }
+                    }
+                });
+            });
+
+            // Compact Up/Down Stepper Buttons
+            document.querySelectorAll('.btn-time-step').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = btn.getAttribute('data-id');
+                    const type = btn.getAttribute('data-type');
+                    let delta = parseFloat(btn.getAttribute('data-delta'));
+                    if (e.shiftKey) {
+                        delta = delta > 0 ? 0.5 : -0.5;
+                    }
+                    const seg = segments.find(s => s.id === id);
+                    if (seg) {
+                        const current = type === 'start' ? seg.startTime : seg.endTime;
+                        updateSegmentTime(id, type, current + delta);
+                    }
+                });
+            });
+
+            // Play Segment
+            document.querySelectorAll('.btn-play-seg').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    togglePlaySegment(id);
+                });
+            });
+
+            // Split in two
+            document.querySelectorAll('.btn-split-seg').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    splitSegmentInTwo(id);
+                });
+            });
+
+            // Delete Segment
+            document.querySelectorAll('.btn-delete-seg').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    segments = segments.filter(s => s.id !== id);
+                    renderSegmentsTable();
+                    drawWaveform();
+                });
+            });
+
+            // Download Single Segment
+            document.querySelectorAll('.btn-download-single').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    const seg = segments.find(s => s.id === id);
+                    if (seg) exportSingleSegment(seg);
+                });
+            });
+        }
+
+        // Helper to update segment start/end time safely with adjacent linkage
+        function updateSegmentTime(id, type, newValue) {
+            const index = segments.findIndex(s => s.id === id);
+            if (index === -1 || !originalAudioBuffer) return;
+
+            const seg = segments[index];
+            const maxDuration = originalAudioBuffer.duration;
+            newValue = Math.max(0, Math.min(maxDuration, newValue));
+
+            if (type === 'start') {
+                if (newValue < seg.endTime) {
+                    seg.startTime = Number(newValue.toFixed(2));
+                    // Automatically sync previous segment's end time to match
+                    if (index > 0) {
+                        segments[index - 1].endTime = Number(newValue.toFixed(2));
+                    }
+                }
+            } else {
+                if (newValue > seg.startTime) {
+                    seg.endTime = Number(newValue.toFixed(2));
+                    // Automatically sync next segment's start time to match
+                    if (index < segments.length - 1) {
+                        segments[index + 1].startTime = Number(newValue.toFixed(2));
+                    }
+                }
+            }
+
+            renderSegmentsTable();
+            drawWaveform();
+        }
+
+        // Split a single segment into two at its midpoint
+        function splitSegmentInTwo(id) {
+            const index = segments.findIndex(s => s.id === id);
+            if (index === -1) return;
+
+            const seg = segments[index];
+            const mid = (seg.startTime + seg.endTime) / 2;
+
+            if (seg.endTime - seg.startTime < 0.4) {
+                showModal('提示', '該段落過短，無法再拆分。', 0, false);
+                setTimeout(hideModal, 1500);
+                return;
+            }
+
+            const oldEnd = seg.endTime;
+            seg.endTime = Number(mid.toFixed(2));
+
+            const newSeg = {
+                id: generateId(),
+                name: `${seg.name}_b`,
+                startTime: Number(mid.toFixed(2)),
+                endTime: oldEnd,
+                selected: false
+            };
+            seg.name = `${seg.name}_a`;
+
+            segments.splice(index + 1, 0, newSeg);
+            renderSegmentsTable();
+            drawWaveform();
+        }
+
+        // Merge selected segments
+        function mergeSelectedSegments() {
+            const selected = segments.filter(s => s.selected);
+            if (selected.length < 2) {
+                showModal('提示', '請至少勾選 2 個或以上的段落進行合併！', 0, false);
+                setTimeout(hideModal, 1800);
+                return;
+            }
+
+            const minStart = Math.min(...selected.map(s => s.startTime));
+            const maxEnd = Math.max(...selected.map(s => s.endTime));
+            const firstIndex = segments.findIndex(s => s.id === selected[0].id);
+
+            segments = segments.filter(s => !s.selected);
+
+            const mergedSeg = {
+                id: generateId(),
+                name: `Merged_${selected[0].name}`,
+                startTime: minStart,
+                endTime: maxEnd,
+                selected: false
+            };
+
+            segments.splice(firstIndex, 0, mergedSeg);
+            renderSegmentsTable();
+            drawWaveform();
+        }
+
+        // Toggle segment audio preview playback
+        function togglePlaySegment(id) {
+            if (isPlaying) {
+                stopPlayback();
+                if (playingSegmentId === id) return;
+            }
+
+            const seg = segments.find(s => s.id === id);
+            if (!seg || !originalAudioBuffer) return;
+
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = originalAudioBuffer;
+            source.connect(audioContext.destination);
+
+            const duration = seg.endTime - seg.startTime;
+            source.start(0, seg.startTime, duration);
+
+            currentPlayingSource = source;
+            isPlaying = true;
+            playingSegmentId = id;
+
+            renderSegmentsTable();
+
+            source.onended = () => {
+                stopPlayback();
+            };
+        }
+
+        function stopPlayback() {
+            if (currentPlayingSource) {
+                try { currentPlayingSource.stop(); } catch(e) {}
+                currentPlayingSource = null;
+            }
+            isPlaying = false;
+            playingSegmentId = null;
+            renderSegmentsTable();
+        }
+
+        // Canvas waveform rendering logic
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+        }
+
+        function drawWaveform() {
+            if (!originalAudioBuffer || !canvas.width) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const channelData = originalAudioBuffer.getChannelData(0);
+            const totalDuration = originalAudioBuffer.duration;
+            const step = Math.ceil(channelData.length / w);
+            const amp = h / 2;
+
+            // Draw Background Waveform
+            ctx.fillStyle = '#334155';
+            for (let i = 0; i < w; i++) {
+                let min = 1.0;
+                let max = -1.0;
+                const sampleIdx = i * step;
+
+                for (let j = 0; j < step; j++) {
+                    const datum = channelData[sampleIdx + j];
+                    if (datum < min) min = datum;
+                    if (datum > max) max = datum;
+                }
+
+                ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+            }
+
+            // Highlight Segments
+            segments.forEach((seg, idx) => {
+                const xStart = (seg.startTime / totalDuration) * w;
+                const xEnd = (seg.endTime / totalDuration) * w;
+
+                // Fill segment background
+                ctx.fillStyle = seg.selected ? 'rgba(59, 130, 246, 0.25)' : (idx % 2 === 0 ? 'rgba(99, 102, 241, 0.12)' : 'rgba(168, 85, 247, 0.12)');
+                ctx.fillRect(xStart, 0, xEnd - xStart, h);
+
+                // Draw Red Split Line
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2 * window.devicePixelRatio;
+                ctx.setLineDash([4 * window.devicePixelRatio, 4 * window.devicePixelRatio]);
+                
+                ctx.beginPath();
+                ctx.moveTo(xStart, 0);
+                ctx.lineTo(xStart, h);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(xEnd, 0);
+                ctx.lineTo(xEnd, h);
+                ctx.stroke();
+
+                ctx.setLineDash([]); // Reset line dash
+
+                // Render Segment Label Text
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = `${10 * window.devicePixelRatio}px sans-serif`;
+                ctx.fillText(`${idx + 1}. ${seg.name}`, xStart + (6 * window.devicePixelRatio), 16 * window.devicePixelRatio);
+            });
+        }
+
+        // Export single segment file
+        async function exportSingleSegment(seg) {
+            const format = document.querySelector('input[name="exportFormat"]:checked').value;
+            showModal('導出中', `正在編碼 ${seg.name}.${format}...`, 30);
+
+            try {
+                const blob = await sliceAndEncodeAudio(seg.startTime, seg.endTime, format);
+                downloadBlob(blob, `${seg.name}.${format}`);
+                hideModal();
+            } catch (err) {
+                console.error(err);
+                showModal('導出失敗', '編碼時發生錯誤', 0, false);
+                setTimeout(hideModal, 2000);
+            }
+        }
+
+        // Export ZIP containing segments
+        async function exportSegmentsZip(selectedOnly = false) {
+            const targetSegments = selectedOnly ? segments.filter(s => s.selected) : segments;
+
+            if (targetSegments.length === 0) {
+                showModal('提示', selectedOnly ? '未勾選任何段落！' : '目前沒有可導出的段落。', 0, false);
+                setTimeout(hideModal, 1800);
+                return;
+            }
+
+            const format = document.querySelector('input[name="exportFormat"]:checked').value;
+            const zip = new JSZip();
+
+            showModal('打包準備中', '正在處理音訊切片與壓縮打包...', 0);
+
+            try {
+                for (let i = 0; i < targetSegments.length; i++) {
+                    const seg = targetSegments[i];
+                    const percent = Math.round(((i + 1) / targetSegments.length) * 100);
+                    showModal('正在打包下載', `正在處理第 ${i + 1} / ${targetSegments.length} 段: ${seg.name}.${format}`, percent);
+
+                    const blob = await sliceAndEncodeAudio(seg.startTime, seg.endTime, format);
+                    zip.file(`${seg.name}.${format}`, blob);
+                }
+
+                showModal('壓縮中', '正在產生 ZIP 壓縮包...', 95);
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                downloadBlob(zipBlob, `${audioFileName}_split.zip`);
+                hideModal();
+
+            } catch (err) {
+                console.error(err);
+                showModal('打包失敗', '產生 ZIP 時發生錯誤', 0, false);
+                setTimeout(hideModal, 2000);
+            }
+        }
+
+        // Slice AudioBuffer and Encode to WAV or MP3
+        function sliceAndEncodeAudio(startTime, endTime, format = 'mp3') {
+            return new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    try {
+                        const sampleRate = originalAudioBuffer.sampleRate;
+                        const numChannels = originalAudioBuffer.numberOfChannels;
+                        const startSample = Math.floor(startTime * sampleRate);
+                        const endSample = Math.floor(endTime * sampleRate);
+                        const frameCount = Math.max(1, endSample - startSample);
+
+                        // Create sliced sub-buffer
+                        const offlineCtx = new OfflineAudioContext(numChannels, frameCount, sampleRate);
+                        const slicedBuffer = offlineCtx.createBuffer(numChannels, frameCount, sampleRate);
+
+                        for (let ch = 0; ch < numChannels; ch++) {
+                            const origData = originalAudioBuffer.getChannelData(ch);
+                            const slicedData = slicedBuffer.getChannelData(ch);
+                            for (let i = 0; i < frameCount; i++) {
+                                slicedData[i] = origData[startSample + i] || 0;
+                            }
+                        }
+
+                        if (format === 'wav') {
+                            const wavBlob = bufferToWavBlob(slicedBuffer);
+                            resolve(wavBlob);
+                        } else {
+                            if (window.lamejs) {
+                                const mp3Blob = bufferToMp3Blob(slicedBuffer);
+                                resolve(mp3Blob);
+                            } else {
+                                console.warn('Lamejs not loaded, falling back to WAV');
+                                const wavBlob = bufferToWavBlob(slicedBuffer);
+                                resolve(wavBlob);
+                            }
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                }, 10);
+            });
+        }
+
+        // Encode AudioBuffer to WAV Blob
+        function bufferToWavBlob(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const length = buffer.length * numChannels * 2 + 44;
+            const outBuffer = new ArrayBuffer(length);
+            const view = new DataView(outBuffer);
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, length - 8, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, length - 44, true);
+
+            let offset = 44;
+            for (let i = 0; i < buffer.length; i++) {
+                for (let ch = 0; ch < numChannels; ch++) {
+                    let sample = buffer.getChannelData(ch)[i];
+                    sample = Math.max(-1, Math.min(1, sample));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+
+            return new Blob([outBuffer], { type: 'audio/wav' });
+        }
+
+        // Encode AudioBuffer to MP3 Blob using Lamejs
+        function bufferToMp3Blob(buffer) {
+            const channels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
+            const mp3Data = [];
+
+            const samplesL = buffer.getChannelData(0);
+            const samplesR = channels > 1 ? buffer.getChannelData(1) : samplesL;
+
+            const sampleBlockSize = 1152;
+            const leftInt16 = new Int16Array(samplesL.length);
+            const rightInt16 = new Int16Array(samplesR.length);
+
+            for (let i = 0; i < samplesL.length; i++) {
+                let sL = Math.max(-1, Math.min(1, samplesL[i]));
+                leftInt16[i] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+
+                if (channels > 1) {
+                    let sR = Math.max(-1, Math.min(1, samplesR[i]));
+                    rightInt16[i] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
+                }
+            }
+
+            for (let i = 0; i < leftInt16.length; i += sampleBlockSize) {
+                const leftChunk = leftInt16.subarray(i, i + sampleBlockSize);
+                let mp3buf;
+                if (channels === 2) {
+                    const rightChunk = rightInt16.subarray(i, i + sampleBlockSize);
+                    mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+                } else {
+                    mp3buf = mp3encoder.encodeBuffer(leftChunk);
+                }
+                if (mp3buf.length > 0) {
+                    mp3Data.push(mp3buf);
+                }
+            }
+
+            const mp3buf = mp3encoder.flush();
+            if (mp3buf.length > 0) {
+                mp3Data.push(mp3buf);
+            }
+
+            return new Blob(mp3Data, { type: 'audio/mp3' });
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(1);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(4, '0')}`;
+        }
+
+        function generateId() {
+            return 'id_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function showModal(title, detail, progress = 0, showProgress = true) {
+            modalTitle.innerText = title;
+            modalDetail.innerText = detail;
+            modalProgressBar.style.width = `${progress}%`;
+            modalProgressBar.parentElement.style.display = showProgress ? 'block' : 'none';
+            loadingModal.classList.remove('hidden');
+        }
+
+        function hideModal() {
+            loadingModal.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
