@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI練習曲 - 影片編輯器 v1.4.0 Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#ecfeff',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            700: '#0e7490',
+                            900: '#164e63',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Custom Range Input */
+        input[type="range"] {
+            accent-color: #06b6d4;
+        }
+        .checkerboard {
+            background-color: #0d1117;
+            background-image: linear-gradient(45deg, #161b22 25%, transparent 25%), 
+                              linear-gradient(-45deg, #161b22 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #161b22 75%), 
+                              linear-gradient(-45deg, transparent 75%, #161b22 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Top Header / Navigation -->
+    <header class="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur px-4 flex items-center justify-between z-20 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-cyan-500/20">
+                <i class="fa-solid fa-film"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-bold text-base tracking-wide text-slate-100">AI練習曲 - 影片編輯器</h1>
+                    <span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full">v1.4.0 Pro</span>
+                </div>
+                <div class="flex items-center space-x-3 text-xs text-slate-400 mt-0.5">
+                    <span class="text-cyan-400 font-medium"><i class="fa-solid fa-wand-magic-sparkles text-[10px] mr-1"></i>製作: AI練習曲</span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-amber-400/90"><i class="fa-solid fa-shield-halved text-[10px] mr-1"></i>歡迎分享，請勿商用</span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-slate-400"><i class="fa-regular fa-calendar text-[10px] mr-1"></i>Updated: 2026-08-09</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-2 rounded-lg transition flex items-center space-x-2 border border-slate-700">
+                <i class="fa-solid fa-upload text-cyan-400"></i>
+                <span>替換影片</span>
+                <input type="file" id="videoFileInput" accept="video/*" class="hidden">
+            </label>
+            <button id="exportBtn" onclick="startExport()" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow-md shadow-cyan-500/20 transition flex items-center space-x-2">
+                <i class="fa-solid fa-file-export"></i>
+                <span>匯出影片</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Sidebar: Tools Tabs -->
+        <aside class="w-80 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0">
+            <!-- Tabs Header -->
+            <div class="flex border-b border-slate-800 text-xs font-medium">
+                <button onclick="switchTab('tab-aspect')" id="tabBtn-aspect" class="tab-btn flex-1 py-3 text-cyan-400 border-b-2 border-cyan-500 bg-slate-800/40 font-semibold flex flex-col items-center gap-1 transition">
+                    <i class="fa-solid fa-crop-simple text-sm"></i>
+                    <span>版面/剪裁</span>
+                </button>
+                <button onclick="switchTab('tab-text')" id="tabBtn-text" class="tab-btn flex-1 py-3 text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex flex-col items-center gap-1 transition">
+                    <i class="fa-solid fa-icons text-sm"></i>
+                    <span>文字/圖片/貼圖</span>
+                </button>
+                <button onclick="switchTab('tab-filters')" id="tabBtn-filters" class="tab-btn flex-1 py-3 text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex flex-col items-center gap-1 transition">
+                    <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                    <span>濾鏡/調色</span>
+                </button>
+                <button onclick="switchTab('tab-audio')" id="tabBtn-audio" class="tab-btn flex-1 py-3 text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex flex-col items-center gap-1 transition">
+                    <i class="fa-solid fa-music text-sm"></i>
+                    <span>音效/BGM</span>
+                </button>
+            </div>
+
+            <!-- Tab Panels Container -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+
+                <!-- TAB 1: ASPECT & TRIM -->
+                <div id="tab-aspect" class="tab-content space-y-5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">影片比例 (Aspect Ratio)</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setAspectRatio('16:9')" class="ratio-btn bg-slate-800 hover:bg-slate-700 border border-cyan-500 text-cyan-400 p-2.5 rounded-lg text-xs flex flex-col items-center gap-1" data-ratio="16:9">
+                                <i class="fa-solid fa-tv"></i>
+                                <span>16:9 (橫版)</span>
+                            </button>
+                            <button onclick="setAspectRatio('9:16')" class="ratio-btn bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 p-2.5 rounded-lg text-xs flex flex-col items-center gap-1" data-ratio="9:16">
+                                <i class="fa-solid fa-mobile-screen"></i>
+                                <span>9:16 (Shorts)</span>
+                            </button>
+                            <button onclick="setAspectRatio('1:1')" class="ratio-btn bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 p-2.5 rounded-lg text-xs flex flex-col items-center gap-1" data-ratio="1:1">
+                                <i class="fa-solid fa-square"></i>
+                                <span>1:1 (IG)</span>
+                            </button>
+                            <button onclick="setAspectRatio('4:5')" class="ratio-btn bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 p-2.5 rounded-lg text-xs flex flex-col items-center gap-1" data-ratio="4:5">
+                                <i class="fa-solid fa-rectangle-portrait"></i>
+                                <span>4:5 (貼文)</span>
+                            </button>
+                            <button onclick="setAspectRatio('custom')" class="ratio-btn col-span-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 p-2.5 rounded-lg text-xs flex items-center justify-center gap-2" data-ratio="custom">
+                                <i class="fa-solid fa-sliders"></i>
+                                <span>自訂解析度 (Custom)</span>
+                            </button>
+                        </div>
+
+                        <!-- Custom Aspect Ratio Inputs -->
+                        <div id="customRatioInputs" class="hidden grid-cols-2 gap-2 mt-3 p-3 bg-slate-800/60 rounded-xl border border-slate-700">
+                            <div>
+                                <label class="text-[10px] text-slate-400 block mb-1">寬 (Width px)</label>
+                                <input type="number" id="customWidthInput" value="1080" min="100" max="3840" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-400 block mb-1">高 (Height px)</label>
+                                <input type="number" id="customHeightInput" value="1080" min="100" max="3840" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200">
+                            </div>
+                            <button onclick="applyCustomRatio()" class="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs py-1.5 rounded mt-1 transition">確定自訂比例</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">畫面填滿模式 (Fit Mode)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setFitMode('contain')" id="fitContainBtn" class="bg-cyan-950/60 border border-cyan-500 text-cyan-300 p-2 rounded-lg text-xs font-medium">
+                                高質感模糊背景 (Contain)
+                            </button>
+                            <button onclick="setFitMode('cover')" id="fitCoverBtn" class="bg-slate-800 border border-slate-700 text-slate-400 p-2 rounded-lg text-xs">
+                                裁切填滿 (Cover)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">播放倍速 (Speed)</label>
+                        <div class="flex items-center space-x-2">
+                            <select id="speedSelect" onchange="setPlaybackSpeed(this.value)" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                                <option value="0.5">0.5x (慢速)</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1.0" selected>1.0x (原速)</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2.0">2.0x (快速)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-800 pt-4">
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">影片剪裁起止點 (Trim Range)</label>
+                        <div class="space-y-3 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                            <div>
+                                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                    <span>起點 (Start Time):</span>
+                                    <span id="trimStartVal" class="text-cyan-400 font-mono">00:00.0</span>
+                                </div>
+                                <input type="range" id="trimStartRange" min="0" max="100" step="0.1" value="0" oninput="updateTrimStart(this.value)" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                    <span>終點 (End Time):</span>
+                                    <span id="trimEndVal" class="text-cyan-400 font-mono">00:00.0</span>
+                                </div>
+                                <input type="range" id="trimEndRange" min="0" max="100" step="0.1" value="100" oninput="updateTrimEnd(this.value)" class="w-full">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: TEXT, EMOJI & IMAGE OVERLAYS -->
+                <div id="tab-text" class="tab-content hidden space-y-5">
+                    
+                    <!-- Image / Folder Import Zone -->
+                    <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800 space-y-2">
+                        <label class="block text-xs font-semibold text-slate-300">匯入外部圖片 / 貼圖 (PNG/JPG/GIF)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-center py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-file-image text-cyan-400"></i>
+                                <span>選擇圖片(多張)</span>
+                                <input type="file" id="imageFileInput" accept="image/png, image/jpeg, image/gif, image/webp" multiple onchange="handleImageUpload(event)" class="hidden">
+                            </label>
+                            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-center py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-folder-open text-amber-400"></i>
+                                <span>匯入圖片資料夾</span>
+                                <input type="file" id="folderFileInput" accept="image/*" webkitdirectory directory multiple onchange="handleFolderUpload(event)" class="hidden">
+                            </label>
+                        </div>
+
+                        <!-- Image Gallery List -->
+                        <div id="imageGalleryContainer" class="hidden pt-2 border-t border-slate-800/60">
+                            <label class="text-[11px] text-slate-400 block mb-1.5">點擊圖片加入畫布 (Click to Add):</label>
+                            <div id="imageGalleryGrid" class="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto pr-1">
+                                <!-- Dynamically populated thumbnails -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">新增文字 (Add Text)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="textInput" placeholder="請輸入字幕文字..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none">
+                            <button onclick="addTextOverlay()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs px-3 py-2 rounded-lg font-medium transition shrink-0">
+                                <i class="fa-solid fa-plus mr-1"></i>新增
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Emoji Quick Picker Grid -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">快速加入 Emoji</label>
+                        <div class="grid grid-cols-6 gap-1.5 p-2 bg-slate-800/50 rounded-xl border border-slate-800 text-center text-lg">
+                            <button onclick="addEmojiOverlay('🔥')" class="hover:bg-slate-700/60 p-1 rounded transition">🔥</button>
+                            <button onclick="addEmojiOverlay('✨')" class="hover:bg-slate-700/60 p-1 rounded transition">✨</button>
+                            <button onclick="addEmojiOverlay('❤️')" class="hover:bg-slate-700/60 p-1 rounded transition">❤️</button>
+                            <button onclick="addEmojiOverlay('😂')" class="hover:bg-slate-700/60 p-1 rounded transition">😂</button>
+                            <button onclick="addEmojiOverlay('😎')" class="hover:bg-slate-700/60 p-1 rounded transition">😎</button>
+                            <button onclick="addEmojiOverlay('🎉')" class="hover:bg-slate-700/60 p-1 rounded transition">🎉</button>
+                            <button onclick="addEmojiOverlay('👏')" class="hover:bg-slate-700/60 p-1 rounded transition">👏</button>
+                            <button onclick="addEmojiOverlay('💡')" class="hover:bg-slate-700/60 p-1 rounded transition">💡</button>
+                            <button onclick="addEmojiOverlay('🚀')" class="hover:bg-slate-700/60 p-1 rounded transition">🚀</button>
+                            <button onclick="addEmojiOverlay('💯')" class="hover:bg-slate-700/60 p-1 rounded transition">💯</button>
+                            <button onclick="addEmojiOverlay('📍')" class="hover:bg-slate-700/60 p-1 rounded transition">📍</button>
+                            <button onclick="addEmojiOverlay('🎬')" class="hover:bg-slate-700/60 p-1 rounded transition">🎬</button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Font File Uploader -->
+                    <div class="p-3 bg-slate-800/40 rounded-xl border border-slate-800">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-xs font-semibold text-slate-300">字體樣式 & 自訂字型</label>
+                            <label class="cursor-pointer text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                                <i class="fa-solid fa-file-font"></i>
+                                <span>上傳 .ttf/.otf/.woff</span>
+                                <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" onchange="handleFontUpload(event)" class="hidden">
+                            </label>
+                        </div>
+                        <select id="fontFamilySelect" onchange="updateSelectedOverlayFont(this.value)" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2">
+                            <option value="Inter, sans-serif">預設無襯線體 (Sans-Serif)</option>
+                            <option value="'Microsoft JhengHei', sans-serif">微軟正黑體</option>
+                            <option value="serif">經典襯線體 (Serif)</option>
+                            <option value="monospace">等寬體 (Monospace)</option>
+                        </select>
+                    </div>
+
+                    <!-- Styling Controls -->
+                    <div class="space-y-3 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                        <!-- Text Size Control -->
+                        <div id="textSizeControl">
+                            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                <span>文字大小:</span>
+                                <span id="fontSizeVal" class="text-cyan-400 font-mono">36px</span>
+                            </div>
+                            <input type="range" id="fontSizeSlider" min="16" max="120" value="36" oninput="updateSelectedOverlaySize(this.value)" class="w-full">
+                        </div>
+
+                        <!-- Image Scale Control (Shown when image item selected) -->
+                        <div id="imageScaleControl" class="hidden">
+                            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                <span>圖片縮放比例 (Scale):</span>
+                                <span id="imageScaleVal" class="text-cyan-400 font-mono">1.0x</span>
+                            </div>
+                            <input type="range" id="imageScaleSlider" min="0.1" max="3.0" step="0.05" value="1.0" oninput="updateSelectedImageScale(this.value)" class="w-full">
+                        </div>
+
+                        <div id="textColorGroup" class="grid grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">文字顏色</label>
+                                <input type="color" id="textColorPicker" value="#ffffff" onchange="updateSelectedOverlayColor(this.value)" class="w-full h-8 bg-slate-900 border border-slate-700 rounded cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">背景襯底顏色</label>
+                                <input type="color" id="textBgColorPicker" value="#000000" onchange="updateSelectedOverlayBgColor(this.value)" class="w-full h-8 bg-slate-900 border border-slate-700 rounded cursor-pointer">
+                            </div>
+                        </div>
+
+                        <div id="textBgGroup" class="flex items-center justify-between pt-1">
+                            <span class="text-[11px] text-slate-400">開啟背景塊襯底</span>
+                            <input type="checkbox" id="textBgToggle" onchange="updateSelectedOverlayBgToggle(this.checked)" class="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-slate-700">
+                        </div>
+                    </div>
+
+                    <!-- Layer Manager List -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">已新增圖層 (Overlay Layers)</label>
+                        <div id="overlayList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                            <p class="text-xs text-slate-500 italic text-center py-3">尚無文字、圖片或 Emoji 項目</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: FILTERS & COLOR -->
+                <div id="tab-filters" class="tab-content hidden space-y-5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">預設視覺濾鏡 (Presets)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setFilterPreset('normal')" class="filter-btn border border-cyan-500 bg-cyan-950/40 text-cyan-300 p-2 rounded-lg text-xs text-left" data-filter="normal">無效果 (Normal)</button>
+                            <button onclick="setFilterPreset('vintage')" class="filter-btn border border-slate-700 bg-slate-800 text-slate-300 p-2 rounded-lg text-xs text-left" data-filter="vintage">復古暖棕 (Vintage)</button>
+                            <button onclick="setFilterPreset('bw')" class="filter-btn border border-slate-700 bg-slate-800 text-slate-300 p-2 rounded-lg text-xs text-left" data-filter="bw">經典黑白 (B&W)</button>
+                            <button onclick="setFilterPreset('warm')" class="filter-btn border border-slate-700 bg-slate-800 text-slate-300 p-2 rounded-lg text-xs text-left" data-filter="warm">陽光暖色 (Warm)</button>
+                            <button onclick="setFilterPreset('cool')" class="filter-btn border border-slate-700 bg-slate-800 text-slate-300 p-2 rounded-lg text-xs text-left" data-filter="cool">賽博冷調 (Cool)</button>
+                            <button onclick="setFilterPreset('vibrant')" class="filter-btn border border-slate-700 bg-slate-800 text-slate-300 p-2 rounded-lg text-xs text-left" data-filter="vibrant">高飽和鮮艷 (Vibrant)</button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-800 pt-4 space-y-4">
+                        <label class="block text-xs font-semibold text-slate-300">畫面微調整 (Adjustments)</label>
+                        <div>
+                            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                <span>亮度 (Brightness):</span>
+                                <span id="brightnessVal" class="text-cyan-400 font-mono">100%</span>
+                            </div>
+                            <input type="range" id="brightnessSlider" min="50" max="150" value="100" oninput="updateColorAdj('brightness', this.value)" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                <span>對比度 (Contrast):</span>
+                                <span id="contrastVal" class="text-cyan-400 font-mono">100%</span>
+                            </div>
+                            <input type="range" id="contrastSlider" min="50" max="150" value="100" oninput="updateColorAdj('contrast', this.value)" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                                <span>飽和度 (Saturation):</span>
+                                <span id="saturateVal" class="text-cyan-400 font-mono">100%</span>
+                            </div>
+                            <input type="range" id="saturateSlider" min="0" max="200" value="100" oninput="updateColorAdj('saturate', this.value)" class="w-full">
+                        </div>
+                        <button onclick="resetColorAdjustments()" class="w-full py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg transition">重設調色參數</button>
+                    </div>
+                </div>
+
+                <!-- TAB 4: AUDIO & BGM -->
+                <div id="tab-audio" class="tab-content hidden space-y-5">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-semibold text-slate-300">原影片音量 (Video Volume)</label>
+                            <span id="videoVolVal" class="text-cyan-400 font-mono text-xs">100%</span>
+                        </div>
+                        <input type="range" id="videoVolSlider" min="0" max="100" value="100" oninput="updateVideoVolume(this.value)" class="w-full">
+                    </div>
+
+                    <div class="border-t border-slate-800 pt-4 space-y-3">
+                        <label class="block text-xs font-semibold text-slate-300">背景音樂 (BGM Track)</label>
+                        <label class="cursor-pointer block bg-slate-800 hover:bg-slate-700 border border-dashed border-slate-700 rounded-xl p-3 text-center transition">
+                            <i class="fa-solid fa-cloud-arrow-up text-cyan-400 text-base mb-1 block"></i>
+                            <span class="text-xs text-slate-300 block font-medium" id="bgmFileName">上傳背景音樂 (MP3/WAV)</span>
+                            <span class="text-[10px] text-slate-500 block">點擊選擇本機音樂檔案</span>
+                            <input type="file" id="bgmFileInput" accept="audio/*" onchange="handleBgmUpload(event)" class="hidden">
+                        </label>
+
+                        <div id="bgmControls" class="space-y-3 opacity-50 pointer-events-none transition-all">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs text-slate-400">BGM 音量控制</label>
+                                <span id="bgmVolVal" class="text-cyan-400 font-mono text-xs">80%</span>
+                            </div>
+                            <input type="range" id="bgmVolSlider" min="0" max="100" value="80" oninput="updateBgmVolume(this.value)" class="w-full">
+                            <button onclick="removeBgm()" class="w-full text-xs text-rose-400 hover:text-rose-300 py-1 transition">移除音樂</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Center Stage: Video Canvas Preview -->
+        <section class="flex-1 bg-slate-950 flex flex-col justify-between overflow-hidden relative">
+            
+            <!-- Canvas Container Wrapper -->
+            <div class="flex-1 relative flex items-center justify-center p-6 checkerboard overflow-hidden">
+                <div id="canvasWrapper" class="relative shadow-2xl rounded-xl overflow-hidden border border-slate-800 transition-all">
+                    <!-- HTML5 Render Canvas -->
+                    <canvas id="previewCanvas" class="block w-full h-full cursor-crosshair"></canvas>
+                </div>
+            </div>
+
+            <!-- Player Controls Toolbar -->
+            <div class="h-20 bg-slate-900 border-t border-slate-800 px-6 flex flex-col justify-center space-y-2 shrink-0">
+                <!-- Timeline Slider -->
+                <div class="flex items-center space-x-3">
+                    <span id="currentTimeDisplay" class="text-xs font-mono text-cyan-400 w-12 text-right">00:00</span>
+                    <input type="range" id="timelineSeeker" min="0" max="100" value="0" step="0.1" oninput="seekVideo(this.value)" class="flex-1">
+                    <span id="durationDisplay" class="text-xs font-mono text-slate-400 w-12">00:00</span>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <div class="flex items-center space-x-2 text-xs text-slate-400">
+                        <span id="aspectBadge" class="bg-slate-800 px-2 py-0.5 rounded text-slate-300 border border-slate-700">16:9</span>
+                        <span id="resBadge" class="text-[10px] text-slate-500">1920x1080</span>
+                    </div>
+
+                    <!-- Center Play/Pause -->
+                    <div class="flex items-center space-x-4">
+                        <button onclick="restartVideo()" class="text-slate-400 hover:text-slate-200 text-sm transition" title="重新開始">
+                            <i class="fa-solid fa-backward-step"></i>
+                        </button>
+                        <button id="playPauseBtn" onclick="togglePlayPause()" class="w-10 h-10 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold flex items-center justify-center shadow-lg shadow-cyan-500/30 transition text-base">
+                            <i class="fa-solid fa-play ml-0.5"></i>
+                        </button>
+                        <button onclick="stepForward()" class="text-slate-400 hover:text-slate-200 text-sm transition" title="前進1秒">
+                            <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button onclick="toggleLoop()" id="loopBtn" class="text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800 px-2.5 py-1 rounded-lg flex items-center gap-1 transition">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>循環</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Export Progress Overlay Modal -->
+    <div id="exportModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-96 max-w-full text-center space-y-4 shadow-2xl">
+            <div class="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mx-auto text-xl animate-pulse">
+                <i class="fa-solid fa-film"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-slate-100 text-base">影片導出中...</h3>
+                <p class="text-xs text-slate-400 mt-1">請稍候，正在即時合成畫面與音訊</p>
+            </div>
+            <!-- Progress Bar -->
+            <div class="space-y-1">
+                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div id="exportProgressBar" class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full w-0 transition-all duration-200"></div>
+                </div>
+                <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+                    <span id="exportProgressText">0%</span>
+                    <span id="exportTimeText">00:00 / 00:00</span>
+                </div>
+            </div>
+            <p class="text-[10px] text-amber-400/80 bg-amber-950/30 border border-amber-800/40 py-1.5 px-2 rounded-lg">
+                ⚠️ 導出期間請勿關閉視窗或切換分頁
+            </p>
+        </div>
+    </div>
+
+    <!-- Hidden Video & Audio Elements for Processing -->
+    <video id="hiddenVideo" class="hidden" crossorigin="anonymous" playsinline></video>
+    <audio id="hiddenAudio" class="hidden"></audio>
+
+    <!-- Toast Notification Box -->
+    <div id="toast" class="fixed bottom-24 right-6 bg-slate-800 border border-slate-700 text-slate-100 text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center space-x-2 transition-all transform translate-y-10 opacity-0 pointer-events-none z-50">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-cyan-400"></i>
+        <span id="toastMsg">提示訊息</span>
+    </div>
+
+    <script>
+        /* State Management Object */
+        const state = {
+            aspectRatio: '16:9',
+            customWidth: 1080,
+            customHeight: 1080,
+            fitMode: 'contain', // 'contain' or 'cover'
+            playbackSpeed: 1.0,
+            trimStart: 0,
+            trimEnd: 0,
+            
+            // Overlays (Text, Emoji, Image)
+            overlays: [],
+            selectedOverlayIndex: -1,
+            isDraggingOverlay: false,
+            dragOffsetX: 0,
+            dragOffsetY: 0,
+
+            // Image Gallery Cache
+            imageGallery: [],
+            
+            // Filters & Adjustments
+            filterPreset: 'normal',
+            brightness: 100,
+            contrast: 100,
+            saturate: 100,
+
+            // Audio
+            videoVolume: 1.0,
+            bgmVolume: 0.8,
+            hasBgm: false,
+            bgmFileName: '',
+
+            // Playback state
+            isPlaying: false,
+            isLooping: true,
+            isExporting: false,
+
+            // Media Recorder for Export
+            mediaRecorder: null,
+            recordedChunks: []
+        };
+
+        // Web Audio API Singletons
+        let audioCtx = null;
+        let videoSourceNode = null;
+        let bgmSourceNode = null;
+        let audioDestNode = null;
+
+        // DOM Element references
+        const video = document.getElementById('hiddenVideo');
+        const bgm = document.getElementById('hiddenAudio');
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+
+        // Sample video fallback
+        const sampleVideoUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        function initApp() {
+            // Load initial sample video
+            video.src = sampleVideoUrl;
+            video.load();
+
+            video.onloadedmetadata = () => {
+                video.playbackRate = state.playbackSpeed;
+                state.trimStart = 0;
+                state.trimEnd = video.duration;
+                
+                document.getElementById('trimStartRange').max = video.duration;
+                document.getElementById('trimEndRange').max = video.duration;
+                document.getElementById('trimEndRange').value = video.duration;
+
+                document.getElementById('timelineSeeker').max = video.duration;
+
+                updateTrimUI();
+                updateAspectCanvasSize();
+                renderLoop();
+            };
+
+            // Hard check for ended event to finish export safely
+            video.addEventListener('ended', () => {
+                if (state.isExporting) {
+                    finishExport();
+                }
+            });
+
+            // Video File Upload Listener
+            document.getElementById('videoFileInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const fileUrl = URL.createObjectURL(file);
+                    video.src = fileUrl;
+                    video.load();
+                    showToast('已成功載入本機影片');
+                }
+            });
+
+            // Canvas Drag Interaction Listeners
+            canvas.addEventListener('mousedown', handleCanvasMouseDown);
+            canvas.addEventListener('mousemove', handleCanvasMouseMove);
+            window.addEventListener('mouseup', handleCanvasMouseUp);
+
+            canvas.addEventListener('touchstart', handleCanvasTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleCanvasTouchMove, { passive: false });
+            window.addEventListener('touchend', handleCanvasMouseUp);
+        }
+
+        function getAudioDestination() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (!audioDestNode) {
+                audioDestNode = audioCtx.createMediaStreamDestination();
+            }
+
+            if (!videoSourceNode && video) {
+                try {
+                    videoSourceNode = audioCtx.createMediaElementSource(video);
+                    videoSourceNode.connect(audioDestNode);
+                    videoSourceNode.connect(audioCtx.destination);
+                } catch (e) {
+                    console.warn("Video source node notice:", e);
+                }
+            }
+
+            if (!bgmSourceNode && bgm && bgm.src) {
+                try {
+                    bgmSourceNode = audioCtx.createMediaElementSource(bgm);
+                    bgmSourceNode.connect(audioDestNode);
+                    bgmSourceNode.connect(audioCtx.destination);
+                } catch (e) {
+                    console.warn("BGM source node notice:", e);
+                }
+            }
+
+            return audioDestNode;
+        }
+
+        function setAspectRatio(ratio) {
+            state.aspectRatio = ratio;
+            
+            const customBox = document.getElementById('customRatioInputs');
+            if (ratio === 'custom') {
+                customBox.classList.remove('hidden');
+                customBox.classList.add('grid');
+            } else {
+                customBox.classList.add('hidden');
+                customBox.classList.remove('grid');
+            }
+
+            document.querySelectorAll('.ratio-btn').forEach(btn => {
+                if (btn.dataset.ratio === ratio) {
+                    btn.classList.add('border-cyan-500', 'text-cyan-400', 'bg-slate-800');
+                    btn.classList.remove('border-slate-700', 'text-slate-300');
+                } else {
+                    btn.classList.remove('border-cyan-500', 'text-cyan-400');
+                    btn.classList.add('border-slate-700', 'text-slate-300');
+                }
+            });
+
+            document.getElementById('aspectBadge').innerText = ratio.toUpperCase();
+            updateAspectCanvasSize();
+        }
+
+        function applyCustomRatio() {
+            const w = parseInt(document.getElementById('customWidthInput').value) || 1080;
+            const h = parseInt(document.getElementById('customHeightInput').value) || 1080;
+            state.customWidth = w;
+            state.customHeight = h;
+            showToast(`已設定自訂比例: ${w} x ${h}`);
+            updateAspectCanvasSize();
+        }
+
+        function getTargetDimensions() {
+            let width = 1920;
+            let height = 1080;
+
+            if (state.aspectRatio === '16:9') {
+                width = 1920; height = 1080;
+            } else if (state.aspectRatio === '9:16') {
+                width = 1080; height = 1920;
+            } else if (state.aspectRatio === '1:1') {
+                width = 1080; height = 1080;
+            } else if (state.aspectRatio === '4:5') {
+                width = 1080; height = 1350;
+            } else if (state.aspectRatio === 'custom') {
+                width = state.customWidth;
+                height = state.customHeight;
+            }
+            return { width, height };
+        }
+
+        function updateAspectCanvasSize() {
+            const { width, height } = getTargetDimensions();
+            canvas.width = width;
+            canvas.height = height;
+
+            document.getElementById('resBadge').innerText = `${width}x${height}`;
+
+            const containerWidth = canvasWrapper.parentElement.clientWidth - 48;
+            const containerHeight = canvasWrapper.parentElement.clientHeight - 48;
+            
+            const ratio = width / height;
+            let cssW = containerWidth;
+            let cssH = containerWidth / ratio;
+
+            if (cssH > containerHeight) {
+                cssH = containerHeight;
+                cssW = containerHeight * ratio;
+            }
+
+            canvasWrapper.style.width = `${cssW}px`;
+            canvasWrapper.style.height = `${cssH}px`;
+        }
+
+        function setFitMode(mode) {
+            state.fitMode = mode;
+            const containBtn = document.getElementById('fitContainBtn');
+            const coverBtn = document.getElementById('fitCoverBtn');
+
+            if (mode === 'contain') {
+                containBtn.className = 'bg-cyan-950/60 border border-cyan-500 text-cyan-300 p-2 rounded-lg text-xs font-medium';
+                coverBtn.className = 'bg-slate-800 border border-slate-700 text-slate-400 p-2 rounded-lg text-xs';
+            } else {
+                coverBtn.className = 'bg-cyan-950/60 border border-cyan-500 text-cyan-300 p-2 rounded-lg text-xs font-medium';
+                containBtn.className = 'bg-slate-800 border border-slate-700 text-slate-400 p-2 rounded-lg text-xs';
+            }
+        }
+
+        function setPlaybackSpeed(speed) {
+            state.playbackSpeed = parseFloat(speed);
+            video.playbackRate = state.playbackSpeed;
+            if (bgm && bgm.src) {
+                bgm.playbackRate = state.playbackSpeed;
+            }
+            showToast(`播放倍速: ${speed}x`);
+        }
+
+        function updateTrimStart(val) {
+            const startVal = parseFloat(val);
+            if (startVal >= state.trimEnd - 0.5) return;
+            state.trimStart = startVal;
+            document.getElementById('trimStartVal').innerText = formatTime(state.trimStart);
+            if (video.currentTime < state.trimStart) {
+                video.currentTime = state.trimStart;
+            }
+        }
+
+        function updateTrimEnd(val) {
+            const endVal = parseFloat(val);
+            if (endVal <= state.trimStart + 0.5) return;
+            state.trimEnd = endVal;
+            document.getElementById('trimEndVal').innerText = formatTime(state.trimEnd);
+            if (video.currentTime > state.trimEnd) {
+                video.currentTime = state.trimStart;
+            }
+        }
+
+        function updateTrimUI() {
+            document.getElementById('trimStartVal').innerText = formatTime(state.trimStart);
+            document.getElementById('trimEndVal').innerText = formatTime(state.trimEnd);
+            document.getElementById('durationDisplay').innerText = formatTime(video.duration || 0);
+        }
+
+        function addTextOverlay() {
+            const textInput = document.getElementById('textInput');
+            const text = textInput.value.trim();
+            if (!text) {
+                showToast('請先輸入文字');
+                return;
+            }
+
+            const font = document.getElementById('fontFamilySelect').value;
+            const size = parseInt(document.getElementById('fontSizeSlider').value) || 36;
+            const color = document.getElementById('textColorPicker').value;
+            const bgColor = document.getElementById('textBgColorPicker').value;
+            const hasBg = document.getElementById('textBgToggle').checked;
+
+            const newOverlay = {
+                id: Date.now(),
+                type: 'text',
+                text: text,
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                size: size,
+                color: color,
+                bgColor: bgColor,
+                hasBg: hasBg,
+                fontFamily: font
+            };
+
+            state.overlays.push(newOverlay);
+            state.selectedOverlayIndex = state.overlays.length - 1;
+            textInput.value = '';
+            selectOverlay(state.selectedOverlayIndex);
+            showToast('已新增文字圖層');
+        }
+
+        function addEmojiOverlay(emoji) {
+            const newOverlay = {
+                id: Date.now(),
+                type: 'text',
+                text: emoji,
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                size: 64,
+                color: '#ffffff',
+                bgColor: '#000000',
+                hasBg: false,
+                fontFamily: 'Inter, sans-serif'
+            };
+
+            state.overlays.push(newOverlay);
+            state.selectedOverlayIndex = state.overlays.length - 1;
+            selectOverlay(state.selectedOverlayIndex);
+            showToast(`已新增 Emoji ${emoji}`);
+        }
+
+        function handleFontUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fontName = 'CustomFont_' + Date.now();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const fontData = e.target.result;
+                const fontFace = new FontFace(fontName, fontData);
+
+                fontFace.load().then((loadedFont) => {
+                    document.fonts.add(loadedFont);
+                    
+                    const select = document.getElementById('fontFamilySelect');
+                    const option = document.createElement('option');
+                    option.value = `'${fontName}', sans-serif`;
+                    option.innerText = `⭐ ${file.name.replace(/\.[^/.]+$/, "")}`;
+                    select.appendChild(option);
+                    select.value = option.value;
+
+                    updateSelectedOverlayFont(option.value);
+                    showToast('已載入自訂字型文件！');
+                }).catch((err) => {
+                    console.error('Font load error:', err);
+                    showToast('字型載入失敗，請確認檔案格式');
+                });
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Image & Folder Upload Handlers
+        function handleImageUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+            processImageFiles(files);
+        }
+
+        function handleFolderUpload(event) {
+            const files = Array.from(event.target.files).filter(f => f.type.startsWith('image/'));
+            if (files.length === 0) {
+                showToast('所選資料夾內無圖片檔案');
+                return;
+            }
+            processImageFiles(files);
+        }
+
+        function processImageFiles(files) {
+            let loadedCount = 0;
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const src = e.target.result;
+                    state.imageGallery.push({
+                        id: Date.now() + Math.random(),
+                        name: file.name,
+                        src: src
+                    });
+                    loadedCount++;
+                    if (loadedCount === files.length) {
+                        renderImageGalleryUI();
+                        showToast(`已成功載入 ${files.length} 張圖片`);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderImageGalleryUI() {
+            const container = document.getElementById('imageGalleryContainer');
+            const grid = document.getElementById('imageGalleryGrid');
+            container.classList.remove('hidden');
+            grid.innerHTML = '';
+
+            state.imageGallery.forEach(item => {
+                const imgThumb = document.createElement('div');
+                imgThumb.className = 'w-full h-14 bg-slate-900 border border-slate-700 hover:border-cyan-500 rounded-lg overflow-hidden cursor-pointer transition flex items-center justify-center p-1 group relative';
+                imgThumb.onclick = () => addImageOverlay(item.src, item.name);
+
+                const img = document.createElement('img');
+                img.src = item.src;
+                img.className = 'max-w-full max-h-full object-contain rounded';
+
+                imgThumb.appendChild(img);
+                grid.appendChild(imgThumb);
+            });
+        }
+
+        function addImageOverlay(src, name) {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                const defaultWidth = Math.min(canvas.width * 0.3, img.naturalWidth || 300);
+                const aspectRatio = (img.naturalHeight || 1) / (img.naturalWidth || 1);
+                const defaultHeight = defaultWidth * aspectRatio;
+
+                const newOverlay = {
+                    id: Date.now(),
+                    type: 'image',
+                    imgElement: img,
+                    src: src,
+                    name: name || '圖片貼圖',
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    width: defaultWidth,
+                    height: defaultHeight,
+                    scale: 1.0,
+                    aspectRatio: aspectRatio
+                };
+
+                state.overlays.push(newOverlay);
+                selectOverlay(state.overlays.length - 1);
+                showToast('已將圖片加入畫布');
+            };
+        }
+
+        function updateSelectedImageScale(val) {
+            const scale = parseFloat(val);
+            document.getElementById('imageScaleVal').innerText = scale.toFixed(2) + 'x';
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                const item = state.overlays[state.selectedOverlayIndex];
+                if (item.type === 'image') {
+                    item.scale = scale;
+                }
+            }
+        }
+
+        function selectOverlay(index) {
+            state.selectedOverlayIndex = index;
+
+            const textSizeControl = document.getElementById('textSizeControl');
+            const imageScaleControl = document.getElementById('imageScaleControl');
+            const textColorGroup = document.getElementById('textColorGroup');
+            const textBgGroup = document.getElementById('textBgGroup');
+
+            if (index !== -1 && state.overlays[index]) {
+                const item = state.overlays[index];
+
+                if (item.type === 'image') {
+                    textSizeControl.classList.add('hidden');
+                    textColorGroup.classList.add('hidden');
+                    textBgGroup.classList.add('hidden');
+                    imageScaleControl.classList.remove('hidden');
+
+                    document.getElementById('imageScaleSlider').value = item.scale || 1.0;
+                    document.getElementById('imageScaleVal').innerText = (item.scale || 1.0).toFixed(2) + 'x';
+                } else {
+                    textSizeControl.classList.remove('hidden');
+                    textColorGroup.classList.remove('hidden');
+                    textBgGroup.classList.remove('hidden');
+                    imageScaleControl.classList.add('hidden');
+
+                    document.getElementById('fontSizeSlider').value = item.size || 36;
+                    document.getElementById('fontSizeVal').innerText = (item.size || 36) + 'px';
+                    document.getElementById('textColorPicker').value = item.color || '#ffffff';
+                    document.getElementById('textBgColorPicker').value = item.bgColor || '#000000';
+                    document.getElementById('textBgToggle').checked = !!item.hasBg;
+                    if (item.fontFamily) {
+                        document.getElementById('fontFamilySelect').value = item.fontFamily;
+                    }
+                }
+            } else {
+                textSizeControl.classList.remove('hidden');
+                textColorGroup.classList.remove('hidden');
+                textBgGroup.classList.remove('hidden');
+                imageScaleControl.classList.add('hidden');
+            }
+            updateOverlayListUI();
+        }
+
+        function updateOverlayListUI() {
+            const listContainer = document.getElementById('overlayList');
+            if (!listContainer) return;
+
+            if (state.overlays.length === 0) {
+                listContainer.innerHTML = '<p class="text-xs text-slate-500 italic text-center py-3">尚無文字、圖片或 Emoji 項目</p>';
+                return;
+            }
+
+            listContainer.innerHTML = '';
+            state.overlays.forEach((item, index) => {
+                const isSelected = index === state.selectedOverlayIndex;
+                const itemEl = document.createElement('div');
+                itemEl.className = `flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer border transition ${
+                    isSelected 
+                        ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300 font-medium' 
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                }`;
+
+                itemEl.onclick = (e) => {
+                    if (e.target.closest('.delete-overlay-btn')) return;
+                    selectOverlay(index);
+                };
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'truncate max-w-[180px] flex items-center gap-1.5';
+                
+                if (item.type === 'image') {
+                    titleSpan.innerHTML = `<i class="fa-solid fa-image text-cyan-400 text-[11px]"></i> <span>${item.name || '圖片貼圖'}</span>`;
+                } else {
+                    titleSpan.innerHTML = `<i class="fa-solid fa-font text-slate-400 text-[11px]"></i> <span>${item.text}</span>`;
+                }
+
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'flex items-center space-x-2';
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-overlay-btn text-slate-500 hover:text-rose-400 p-1 transition';
+                delBtn.title = '刪除項目';
+                delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteOverlay(index);
+                };
+
+                actionsDiv.appendChild(delBtn);
+                itemEl.appendChild(titleSpan);
+                itemEl.appendChild(actionsDiv);
+                listContainer.appendChild(itemEl);
+            });
+        }
+
+        function deleteOverlay(index) {
+            if (index >= 0 && index < state.overlays.length) {
+                state.overlays.splice(index, 1);
+                if (state.selectedOverlayIndex === index) {
+                    state.selectedOverlayIndex = -1;
+                } else if (state.selectedOverlayIndex > index) {
+                    state.selectedOverlayIndex--;
+                }
+                updateOverlayListUI();
+                showToast('已刪除圖層項目');
+            }
+        }
+
+        function updateSelectedOverlaySize(val) {
+            document.getElementById('fontSizeVal').innerText = val + 'px';
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                state.overlays[state.selectedOverlayIndex].size = parseInt(val);
+            }
+        }
+
+        function updateSelectedOverlayColor(val) {
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                state.overlays[state.selectedOverlayIndex].color = val;
+            }
+        }
+
+        function updateSelectedOverlayBgColor(val) {
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                state.overlays[state.selectedOverlayIndex].bgColor = val;
+            }
+        }
+
+        function updateSelectedOverlayBgToggle(checked) {
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                state.overlays[state.selectedOverlayIndex].hasBg = checked;
+            }
+        }
+
+        function updateSelectedOverlayFont(font) {
+            if (state.selectedOverlayIndex !== -1 && state.overlays[state.selectedOverlayIndex]) {
+                state.overlays[state.selectedOverlayIndex].fontFamily = font;
+            }
+        }
+
+        function setFilterPreset(preset) {
+            state.filterPreset = preset;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.dataset.filter === preset) {
+                    btn.classList.add('border-cyan-500', 'bg-cyan-950/40', 'text-cyan-300');
+                    btn.classList.remove('border-slate-700', 'bg-slate-800', 'text-slate-300');
+                } else {
+                    btn.classList.remove('border-cyan-500', 'bg-cyan-950/40', 'text-cyan-300');
+                    btn.classList.add('border-slate-700', 'bg-slate-800', 'text-slate-300');
+                }
+            });
+        }
+
+        function updateColorAdj(type, val) {
+            state[type] = parseInt(val);
+            document.getElementById(`${type === 'saturate' ? 'saturate' : type}Val`).innerText = val + '%';
+        }
+
+        function resetColorAdjustments() {
+            state.brightness = 100;
+            state.contrast = 100;
+            state.saturate = 100;
+            state.filterPreset = 'normal';
+
+            document.getElementById('brightnessSlider').value = 100;
+            document.getElementById('contrastSlider').value = 100;
+            document.getElementById('saturateSlider').value = 100;
+            document.getElementById('brightnessVal').innerText = '100%';
+            document.getElementById('contrastVal').innerText = '100%';
+            document.getElementById('saturateVal').innerText = '100%';
+
+            setFilterPreset('normal');
+            showToast('已重設為預設視覺參數');
+        }
+
+        function updateVideoVolume(val) {
+            state.videoVolume = val / 100;
+            video.volume = state.videoVolume;
+            document.getElementById('videoVolVal').innerText = val + '%';
+        }
+
+        function handleBgmUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                bgm.src = url;
+                state.hasBgm = true;
+                state.bgmFileName = file.name;
+
+                document.getElementById('bgmFileName').innerText = file.name;
+                const bgmControls = document.getElementById('bgmControls');
+                bgmControls.classList.remove('opacity-50', 'pointer-events-none');
+
+                if (state.isPlaying) {
+                    bgm.play().catch(() => {});
+                }
+                showToast('已載入背景音樂');
+            }
+        }
+
+        function updateBgmVolume(val) {
+            state.bgmVolume = val / 100;
+            bgm.volume = state.bgmVolume;
+            document.getElementById('bgmVolVal').innerText = val + '%';
+        }
+
+        function removeBgm() {
+            bgm.pause();
+            bgm.src = '';
+            state.hasBgm = false;
+            state.bgmFileName = '';
+
+            document.getElementById('bgmFileName').innerText = '上傳背景音樂 (MP3/WAV)';
+            const bgmControls = document.getElementById('bgmControls');
+            bgmControls.classList.add('opacity-50', 'pointer-events-none');
+            showToast('已移除背景音樂');
+        }
+
+        function renderLoop() {
+            // Lock speed rate to ensure export & preview hold speed setting
+            if (video && video.playbackRate !== state.playbackSpeed) {
+                video.playbackRate = state.playbackSpeed;
+            }
+            if (bgm && bgm.src && bgm.playbackRate !== state.playbackSpeed) {
+                bgm.playbackRate = state.playbackSpeed;
+            }
+
+            if (!video.paused && !video.ended) {
+                document.getElementById('timelineSeeker').value = video.currentTime;
+                document.getElementById('currentTimeDisplay').innerText = formatTime(video.currentTime);
+            }
+
+            // Check trim bounds during normal playback & export
+            if (state.isExporting) {
+                if (video.currentTime >= state.trimEnd - 0.05 || video.ended) {
+                    finishExport();
+                }
+            } else if (!video.paused && video.currentTime >= state.trimEnd) {
+                if (state.isLooping) {
+                    video.currentTime = state.trimStart;
+                } else {
+                    pauseVideo();
+                }
+            }
+
+            // Canvas Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (video.readyState >= 2) {
+                const vWidth = video.videoWidth;
+                const vHeight = video.videoHeight;
+                const canvasRatio = canvas.width / canvas.height;
+                const videoRatio = vWidth / vHeight;
+
+                // 1. Draw Blurred Background if in Contain mode
+                if (state.fitMode === 'contain') {
+                    ctx.save();
+                    ctx.filter = 'blur(30px) brightness(0.6)';
+                    ctx.drawImage(video, -20, -20, canvas.width + 40, canvas.height + 40);
+                    ctx.restore();
+                }
+
+                // 2. Build CSS Filter String for Video Frame
+                let filterStr = `brightness(${state.brightness}%) contrast(${state.contrast}%) saturate(${state.saturate}%) `;
+                if (state.filterPreset === 'vintage') {
+                    filterStr += 'sepia(50%) hue-rotate(-30deg)';
+                } else if (state.filterPreset === 'bw') {
+                    filterStr += 'grayscale(100%)';
+                } else if (state.filterPreset === 'warm') {
+                    filterStr += 'sepia(25%) saturate(140%)';
+                } else if (state.filterPreset === 'cool') {
+                    filterStr += 'hue-rotate(180deg) saturate(120%)';
+                } else if (state.filterPreset === 'vibrant') {
+                    filterStr += 'saturate(180%) contrast(110%)';
+                }
+
+                ctx.save();
+                ctx.filter = filterStr;
+
+                // Calculate Position based on fit mode
+                let drawW, drawH, drawX, drawY;
+
+                if (state.fitMode === 'cover') {
+                    if (videoRatio > canvasRatio) {
+                        drawH = canvas.height;
+                        drawW = canvas.height * videoRatio;
+                    } else {
+                        drawW = canvas.width;
+                        drawH = canvas.width / videoRatio;
+                    }
+                } else {
+                    // Contain
+                    if (videoRatio > canvasRatio) {
+                        drawW = canvas.width;
+                        drawH = canvas.width / videoRatio;
+                    } else {
+                        drawH = canvas.height;
+                        drawW = canvas.height * videoRatio;
+                    }
+                }
+
+                drawX = (canvas.width - drawW) / 2;
+                drawY = (canvas.height - drawH) / 2;
+
+                ctx.drawImage(video, drawX, drawY, drawW, drawH);
+                ctx.restore();
+            }
+
+            // 3. Render Overlays (Text, Emoji & Image overlays)
+            state.overlays.forEach((item, index) => {
+                ctx.save();
+
+                if (item.type === 'image') {
+                    // Render Image Overlay
+                    const renderW = item.width * (item.scale || 1.0);
+                    const renderH = item.height * (item.scale || 1.0);
+                    const drawX = item.x - renderW / 2;
+                    const drawY = item.y - renderH / 2;
+
+                    ctx.drawImage(item.imgElement, drawX, drawY, renderW, renderH);
+
+                    // Highlight border if selected
+                    if (index === state.selectedOverlayIndex && !state.isExporting) {
+                        ctx.strokeStyle = '#06b6d4';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 4]);
+                        const pad = 6;
+                        ctx.strokeRect(drawX - pad, drawY - pad, renderW + pad * 2, renderH + pad * 2);
+                    }
+                } else {
+                    // Render Text Overlay
+                    ctx.font = `${item.size}px ${item.fontFamily || 'Inter, sans-serif'}`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    const textWidth = ctx.measureText(item.text).width;
+                    const textHeight = item.size;
+
+                    // Optional Background Box
+                    if (item.hasBg) {
+                        ctx.fillStyle = item.bgColor || '#000000';
+                        const paddingHorizontal = 16;
+                        const paddingVertical = 8;
+                        ctx.fillRect(
+                            item.x - textWidth / 2 - paddingHorizontal,
+                            item.y - textHeight / 2 - paddingVertical,
+                            textWidth + paddingHorizontal * 2,
+                            textHeight + paddingVertical * 2
+                        );
+                    }
+
+                    // Text
+                    ctx.fillStyle = item.color || '#ffffff';
+                    ctx.fillText(item.text, item.x, item.y);
+
+                    // Highlight border if selected
+                    if (index === state.selectedOverlayIndex && !state.isExporting) {
+                        ctx.strokeStyle = '#06b6d4';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 4]);
+                        const pad = 12;
+                        ctx.strokeRect(
+                            item.x - textWidth / 2 - pad,
+                            item.y - textHeight / 2 - pad,
+                            textWidth + pad * 2,
+                            textHeight + pad * 2
+                        );
+                    }
+                }
+
+                ctx.restore();
+            });
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        function getCanvasCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function handleCanvasMouseDown(e) {
+            const coords = getCanvasCoordinates(e);
+
+            for (let i = state.overlays.length - 1; i >= 0; i--) {
+                const item = state.overlays[i];
+                let bounds = { left: 0, right: 0, top: 0, bottom: 0 };
+
+                if (item.type === 'image') {
+                    const renderW = item.width * (item.scale || 1.0);
+                    const renderH = item.height * (item.scale || 1.0);
+                    bounds.left = item.x - renderW / 2 - 10;
+                    bounds.right = item.x + renderW / 2 + 10;
+                    bounds.top = item.y - renderH / 2 - 10;
+                    bounds.bottom = item.y + renderH / 2 + 10;
+                } else {
+                    ctx.font = `${item.size}px ${item.fontFamily || 'Inter, sans-serif'}`;
+                    const textWidth = ctx.measureText(item.text).width;
+                    const textHeight = item.size;
+                    bounds.left = item.x - textWidth / 2 - 20;
+                    bounds.right = item.x + textWidth / 2 + 20;
+                    bounds.top = item.y - textHeight / 2 - 20;
+                    bounds.bottom = item.y + textHeight / 2 + 20;
+                }
+
+                if (
+                    coords.x >= bounds.left &&
+                    coords.x <= bounds.right &&
+                    coords.y >= bounds.top &&
+                    coords.y <= bounds.bottom
+                ) {
+                    selectOverlay(i);
+                    state.isDraggingOverlay = true;
+                    state.dragOffsetX = coords.x - item.x;
+                    state.dragOffsetY = coords.y - item.y;
+                    return;
+                }
+            }
+
+            selectOverlay(-1);
+        }
+
+        function handleCanvasMouseMove(e) {
+            if (state.isDraggingOverlay && state.selectedOverlayIndex !== -1) {
+                const coords = getCanvasCoordinates(e);
+                const item = state.overlays[state.selectedOverlayIndex];
+                item.x = coords.x - state.dragOffsetX;
+                item.y = coords.y - state.dragOffsetY;
+            }
+        }
+
+        function handleCanvasMouseUp() {
+            state.isDraggingOverlay = false;
+        }
+
+        function handleCanvasTouchStart(e) {
+            e.preventDefault();
+            handleCanvasMouseDown(e);
+        }
+
+        function handleCanvasTouchMove(e) {
+            e.preventDefault();
+            handleCanvasMouseMove(e);
+        }
+
+        function togglePlayPause() {
+            if (video.paused) {
+                playVideo();
+            } else {
+                pauseVideo();
+            }
+        }
+
+        function playVideo() {
+            if (video.currentTime >= state.trimEnd) {
+                video.currentTime = state.trimStart;
+            }
+            video.playbackRate = state.playbackSpeed;
+            if (bgm && bgm.src) {
+                bgm.playbackRate = state.playbackSpeed;
+            }
+            video.play().then(() => {
+                video.playbackRate = state.playbackSpeed;
+                if (bgm && bgm.src) bgm.playbackRate = state.playbackSpeed;
+                state.isPlaying = true;
+                if (state.hasBgm && bgm.src) {
+                    bgm.play().catch(() => {});
+                }
+                document.getElementById('playPauseBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
+            }).catch(err => {
+                console.error("Autoplay failed:", err);
+            });
+        }
+
+        function pauseVideo() {
+            video.pause();
+            if (state.hasBgm && bgm.src) bgm.pause();
+            state.isPlaying = false;
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fa-solid fa-play ml-0.5"></i>';
+        }
+
+        function restartVideo() {
+            video.currentTime = state.trimStart;
+            if (state.hasBgm && bgm.src) bgm.currentTime = 0;
+            playVideo();
+        }
+
+        function stepForward() {
+            video.currentTime = Math.min(state.trimEnd, video.currentTime + 1.0);
+        }
+
+        function seekVideo(val) {
+            video.currentTime = parseFloat(val);
+        }
+
+        function toggleLoop() {
+            state.isLooping = !state.isLooping;
+            const btn = document.getElementById('loopBtn');
+            if (state.isLooping) {
+                btn.className = 'text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800 px-2.5 py-1 rounded-lg flex items-center gap-1 transition';
+            } else {
+                btn.className = 'text-xs text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1 transition';
+            }
+        }
+
+        async function startExport() {
+            if (state.isExporting) return;
+
+            pauseVideo();
+            state.isExporting = true;
+            state.recordedChunks = [];
+
+            // Reset video time to start & enforce selected playback rate
+            video.currentTime = state.trimStart;
+            video.playbackRate = state.playbackSpeed;
+            
+            if (state.hasBgm && bgm.src) {
+                bgm.currentTime = 0;
+                bgm.playbackRate = state.playbackSpeed;
+            }
+
+            // Open Modal UI
+            document.getElementById('exportModal').classList.remove('hidden');
+            document.getElementById('exportProgressBar').style.width = '0%';
+            document.getElementById('exportProgressText').innerText = '0%';
+
+            // Setup Audio Destination safely
+            let audioTracks = [];
+            try {
+                const dest = getAudioDestination();
+                if (dest && dest.stream) {
+                    audioTracks = dest.stream.getAudioTracks();
+                }
+            } catch (e) {
+                console.warn("Audio capture notice:", e);
+            }
+
+            // Combine Canvas Stream with Audio Tracks
+            const canvasStream = canvas.captureStream(30);
+            const tracks = [...canvasStream.getVideoTracks(), ...audioTracks];
+            const combinedStream = new MediaStream(tracks);
+
+            let mimeType = 'video/webm;codecs=vp9';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm;codecs=vp8';
+            }
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/webm';
+            }
+
+            try {
+                state.mediaRecorder = mimeType ? new MediaRecorder(combinedStream, { mimeType }) : new MediaRecorder(combinedStream);
+            } catch (err) {
+                console.error("MediaRecorder init fallback:", err);
+                state.mediaRecorder = new MediaRecorder(combinedStream);
+            }
+
+            state.mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    state.recordedChunks.push(e.data);
+                }
+            };
+
+            state.mediaRecorder.onstop = () => {
+                const blob = new Blob(state.recordedChunks, { type: state.mediaRecorder.mimeType || 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `AI練習曲_影片_${Date.now()}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 200);
+
+                // Close Modal & Reset State
+                document.getElementById('exportModal').classList.add('hidden');
+                state.isExporting = false;
+                showToast('影片導出完成！已自動下載儲存');
+            };
+
+            // Start Recording with 100ms interval slice
+            state.mediaRecorder.start(100);
+
+            // Play Video & Re-enforce playback speed after play resolves
+            try {
+                await video.play();
+                video.playbackRate = state.playbackSpeed;
+                if (bgm && bgm.src) {
+                    bgm.playbackRate = state.playbackSpeed;
+                }
+                state.isPlaying = true;
+                if (state.hasBgm && bgm.src) {
+                    bgm.play().catch(() => {});
+                }
+            } catch (err) {
+                console.error("Export play error:", err);
+            }
+
+            // Track export progress bar and force finish when time is up
+            const totalExportDuration = Math.max(0.1, state.trimEnd - state.trimStart);
+            const progressInterval = setInterval(() => {
+                if (!state.isExporting) {
+                    clearInterval(progressInterval);
+                    return;
+                }
+                const currentProgress = Math.max(0, video.currentTime - state.trimStart);
+                const percent = Math.min(100, Math.floor((currentProgress / totalExportDuration) * 100));
+                
+                document.getElementById('exportProgressBar').style.width = `${percent}%`;
+                document.getElementById('exportProgressText').innerText = `${percent}%`;
+                document.getElementById('exportTimeText').innerText = `${formatTime(video.currentTime)} / ${formatTime(state.trimEnd)}`;
+
+                // Safety finish condition
+                if (video.currentTime >= state.trimEnd - 0.05 || video.ended) {
+                    clearInterval(progressInterval);
+                    finishExport();
+                }
+            }, 100);
+        }
+
+        function finishExport() {
+            pauseVideo();
+            if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+                state.mediaRecorder.stop();
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-cyan-400', 'border-cyan-500', 'bg-slate-800/40', 'font-semibold');
+                btn.classList.add('text-slate-400', 'border-transparent');
+            });
+
+            const activeBtn = document.getElementById(`tabBtn-${tabId.replace('tab-', '')}`);
+            if (activeBtn) {
+                activeBtn.classList.add('text-cyan-400', 'border-cyan-500', 'bg-slate-800/40', 'font-semibold');
+                activeBtn.classList.remove('text-slate-400', 'border-transparent');
+            }
+        }
+
+        function formatTime(seconds) {
+            const sec = parseFloat(seconds) || 0;
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            const ms = Math.floor((sec % 1) * 10);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
+```
