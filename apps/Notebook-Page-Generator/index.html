@@ -1,0 +1,3612 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智慧筆記本內頁生成器</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- jsPDF 函式庫用於匯出高品質 PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500&family=Noto+Sans+TC:wght@100;200;300;400;500&family=Noto+Serif+TC:wght@200;300;400&family=M+PLUS+Rounded+1c:wght@300;400&family=JetBrains+Mono:wght@100;200;300;400&display=swap');
+    
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+    }
+
+    /* 關鍵修復：徹底禁止 SVG 繼承群組的 stroke 描邊，防止文字被描邊加粗糊掉 */
+    #notebookSvg text {
+      letter-spacing: 0.04em;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: geometricPrecision;
+      stroke: none !important; /* 核心：防止線條描邊包覆文字造成假粗體 */
+    }
+    
+    /* 隱藏原生滾動條但保持可滾動 */
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* 紙張立體陰影 */
+    .paper-shadow {
+      box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.2), 0 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 列印設定：隱藏操作面板，僅列印 1:1 紙張內容 */
+    @media print {
+      body {
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .preview-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+      }
+      #paperWrapper {
+        box-shadow: none !important;
+        transform: none !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        margin: 0 !important;
+      }
+      @page {
+        margin: 0;
+        size: auto;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col md:flex-row overflow-x-hidden">
+
+  <!-- ==================== 左側設定控制面板 ==================== -->
+  <aside class="no-print w-full md:w-[380px] lg:w-[420px] bg-white border-r border-slate-200 h-auto md:h-screen md:sticky md:top-0 flex flex-col z-20 shadow-lg flex-shrink-0">
+    
+    <!-- 頂部標題列 -->
+    <div class="p-4 border-b border-slate-200 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white flex-shrink-0">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="book-open" class="w-6 h-6 text-indigo-300"></i>
+          <h1 class="text-lg font-bold tracking-tight">智慧筆記本內頁生成器</h1>
+        </div>
+        <span class="text-xs bg-indigo-700/80 text-indigo-200 px-2 py-0.5 rounded-full font-mono">v3.0 專業版</span>
+      </div>
+      <p class="text-xs text-indigo-200 mt-1">自訂向量筆記本・PDF多頁匯出・iPad數位手帳</p>
+      
+      <!-- 頂部署名與授權快速資訊列 -->
+      <div class="mt-2 pt-2 border-t border-indigo-700/60 flex items-center justify-between text-[11px] text-indigo-300">
+        <span>製作: AI練習曲</span>
+        <span class="text-indigo-200">歡迎分享，請勿商用</span>
+      </div>
+    </div>
+
+    <!-- 側邊控制項目滾動區 -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin text-sm">
+
+      <!-- 快速樣板推薦 -->
+      <div class="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
+        <label class="block text-xs font-semibold text-indigo-900 mb-2 flex items-center gap-1.5">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-600"></i> 快速套用精選範本
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="applyPreset('grid')" class="px-2.5 py-1.5 text-xs text-left bg-white border border-indigo-200 rounded-lg hover:border-indigo-500 hover:shadow-sm transition">
+            <div class="font-medium text-slate-800">經典方格筆記</div>
+            <div class="text-[10px] text-slate-500">5mm 方格 / 米黃護眼</div>
+          </button>
+          <button onclick="applyPreset('cornell')" class="px-2.5 py-1.5 text-xs text-left bg-white border border-indigo-200 rounded-lg hover:border-indigo-500 hover:shadow-sm transition">
+            <div class="font-medium text-slate-800">考研康乃爾</div>
+            <div class="text-[10px] text-slate-500">標準提示欄 + 筆記 + 總結</div>
+          </button>
+          <button onclick="applyPreset('manuscript')" class="px-2.5 py-1.5 text-xs text-left bg-white border border-indigo-200 rounded-lg hover:border-indigo-500 hover:shadow-sm transition">
+            <div class="font-medium text-slate-800">標準作文原稿紙</div>
+            <div class="text-[10px] text-slate-500">高容量純直行 / 磚紅印</div>
+          </button>
+          <button onclick="applyPreset('journal')" class="px-2.5 py-1.5 text-xs text-left bg-white border border-indigo-200 rounded-lg hover:border-indigo-500 hover:shadow-sm transition">
+            <div class="font-medium text-slate-800">一日一頁手帳</div>
+            <div class="text-[10px] text-slate-500">待辦/收支/心情/拍立得</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1. 版面與規格 -->
+      <div class="space-y-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="layout" class="w-4 h-4 text-slate-500"></i> 1. 版面與規格
+        </h2>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">紙張尺寸</label>
+            <select id="pageSize" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="A4" selected>A4 (210 × 297 mm)</option>
+              <option value="A5">A5 (148 × 210 mm)</option>
+              <option value="B5">B5 (176 × 250 mm)</option>
+              <option value="Letter">US Letter (8.5 × 11 in)</option>
+              <option value="iPad">iPad (4:3 數位筆記)</option>
+              <option value="Wide">16:9 電子紙寬螢幕</option>
+              <option value="Eink">16:10 電子紙常見比例</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">紙張方向</label>
+            <div class="grid grid-cols-2 gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-300">
+              <button id="orientPortrait" onclick="setOrientation('portrait')" class="py-1 text-xs font-medium rounded bg-white text-indigo-700 shadow-sm">直式</button>
+              <button id="orientLandscape" onclick="setOrientation('landscape')" class="py-1 text-xs font-medium rounded text-slate-600 hover:text-slate-900">橫式</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-medium text-slate-700">紙張安全邊距 (Margin)</label>
+            <span id="marginVal" class="text-xs font-mono text-indigo-600 font-medium">12 mm</span>
+          </div>
+          <input type="range" id="pageMargin" min="0" max="30" value="12" step="1" oninput="updateGenerator()" class="w-full accent-indigo-600">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">裝訂打孔輔助</label>
+            <select id="punchHoles" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+              <option value="none" selected>無打孔標記</option>
+              <option value="2-hole">2 孔活頁</option>
+              <option value="6-hole">6 孔手帳</option>
+              <option value="binder-line">左側裝訂裁切虛線</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">裝訂留邊 (Gutter)</label>
+            <select id="gutter" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+              <option value="0" selected>標準 (無額外留白)</option>
+              <option value="8">左側 +8mm 裝訂邊</option>
+              <option value="12">左側 +12mm 寬邊</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <hr class="border-slate-200">
+
+      <!-- 2. 內容版型 -->
+      <div class="space-y-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i> 2. 內頁格局與排版
+        </h2>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1">格局類型</label>
+          <select id="patternType" onchange="onPatternChange()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+            <option value="blank">純空白 (Blank)</option>
+            <option value="dot" selected>點點點陣 (Dot Grid)</option>
+            <option value="grid">方格線 (Grid)</option>
+            <option value="ruled">橫線 (Ruled Lines)</option>
+            <option value="music">音樂五線譜 (Music Staff)</option>
+            <option value="manuscript">作文原稿紙 (純直行書寫)</option>
+            <option value="journal">一日一頁手帳日記 (Daily Journal)</option>
+            <option value="recipe">烘焙與烹飪食譜 (Recipe Sheet)</option>
+            <option value="book">讀書筆記 (Book Review)</option>
+            <option value="movie">電影觀影心得 (Movie Review)</option>
+            <option value="travel">旅行探索日誌 (Travel Journal)</option>
+            <option value="monthly">月計畫日曆 (Monthly Planner)</option>
+            <option value="weekly">周計畫手帳 (Weekly Planner)</option>
+            <option value="vertical-ruled">直條信箋 (Vertical Ruled)</option>
+            <option value="cornell">康乃爾筆記 (Cornell Notes)</option>
+            <option value="hexagon">六角有機化學網格 (Hexagon)</option>
+          </select>
+        </div>
+
+        <!-- 動態依格局顯示的間距/細部控制區 -->
+        <div id="dynamicPatternControls" class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+          <!-- JS 動態生成 -->
+        </div>
+      </div>
+
+      <hr class="border-slate-200">
+
+      <!-- 3. 線條與點點外觀 -->
+      <div class="space-y-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="palette" class="w-4 h-4 text-slate-500"></i> 3. 線條外觀與顏色
+        </h2>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">線條/點點顏色</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="lineColor" value="#94a3b8" oninput="updateGenerator()" class="w-7 h-7 rounded border border-slate-300 cursor-pointer p-0">
+              <select id="presetLineColor" onchange="document.getElementById('lineColor').value=this.value; updateGenerator();" class="text-xs border border-slate-300 rounded px-1.5 py-1 flex-1 bg-white">
+                <option value="#94a3b8">淺石墨灰</option>
+                <option value="#cbd5e1">極淡微灰</option>
+                <option value="#64748b">深石板灰</option>
+                <option value="#3b82f6">淡雅晴藍</option>
+                <option value="#b91c1c">傳統朱紅</option>
+                <option value="#059669">若竹雅綠</option>
+                <option value="#d97706">琥珀淡棕</option>
+                <option value="#ffffff">純白 (暗黑專用)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">線條粗細 (mm)</label>
+            <select id="lineWidth" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+              <option value="0.1">0.1 mm (超細 hairline)</option>
+              <option value="0.2" selected>0.2 mm (標準精細)</option>
+              <option value="0.35">0.35 mm (清晰)</option>
+              <option value="0.5">0.5 mm (粗體)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs font-medium text-slate-700">線條不透明度</label>
+            <span id="lineOpacityVal" class="text-xs font-mono text-indigo-600 font-medium">85%</span>
+          </div>
+          <input type="range" id="lineOpacity" min="15" max="100" value="85" oninput="updateGenerator()" class="w-full accent-indigo-600">
+        </div>
+      </div>
+
+      <hr class="border-slate-200">
+
+      <!-- 4. 紙質底色與底圖遮罩 -->
+      <div class="space-y-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="layers" class="w-4 h-4 text-slate-500"></i> 4. 紙質底色與底圖遮罩
+        </h2>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1.5">預設經典底色</label>
+          <div class="grid grid-cols-5 gap-1.5">
+            <button onclick="setPaperColor('#ffffff')" class="h-7 rounded border border-slate-300 bg-white hover:ring-2 ring-indigo-400 transition" title="純白"></button>
+            <button onclick="setPaperColor('#fefbf3')" class="h-7 rounded border border-amber-200 bg-[#fefbf3] hover:ring-2 ring-indigo-400 transition" title="護眼米黃"></button>
+            <button onclick="setPaperColor('#f0fdf4')" class="h-7 rounded border border-emerald-200 bg-[#f0fdf4] hover:ring-2 ring-indigo-400 transition" title="青瓷薄綠"></button>
+            <button onclick="setPaperColor('#f0f9ff')" class="h-7 rounded border border-sky-200 bg-[#f0f9ff] hover:ring-2 ring-indigo-400 transition" title="晨曦淺藍"></button>
+            <button onclick="setPaperColor('#1e293b', true)" class="h-7 rounded border border-slate-700 bg-[#1e293b] hover:ring-2 ring-indigo-400 transition" title="黑曜石深色"></button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-medium text-slate-700">自訂純色：</label>
+          <input type="color" id="paperBgColor" value="#ffffff" oninput="state.paperBg = this.value; updateGenerator();" class="w-6 h-6 rounded border border-slate-300 cursor-pointer p-0">
+          <span id="paperBgHex" class="text-xs font-mono text-slate-500">#FFFFFF</span>
+        </div>
+
+        <!-- 上傳底圖與透明度遮罩 -->
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <i data-lucide="image" class="w-3.5 h-3.5 text-indigo-600"></i> 自訂底圖與遮罩
+            </label>
+            <button id="clearBgImgBtn" onclick="clearBgImage()" class="hidden text-[10px] text-red-500 hover:underline">移除底圖</button>
+          </div>
+
+          <input type="file" id="bgImageUpload" accept="image/*" onchange="handleImageUpload(event)" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+
+          <div id="bgImageControls" class="space-y-2 pt-1 hidden">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] text-slate-600">底圖不透明度</span>
+                <span id="imgOpacityVal" class="text-[11px] font-mono font-medium text-indigo-600">25%</span>
+              </div>
+              <input type="range" id="imgOpacity" min="5" max="100" value="25" oninput="updateGenerator()" class="w-full accent-indigo-600">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+              <div>
+                <label class="block text-[11px] text-slate-600 mb-1">色彩遮罩 (Tint)</label>
+                <input type="color" id="maskColor" value="#fefbf3" oninput="updateGenerator()" class="w-full h-6 rounded border border-slate-300 cursor-pointer">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-600 mb-1">遮罩濃度</label>
+                <input type="range" id="maskOpacity" min="0" max="95" value="40" oninput="updateGenerator()" class="w-full accent-indigo-600 mt-1">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="border-slate-200">
+
+      <!-- 5. 標題、日期與頁碼 -->
+      <div class="space-y-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="type" class="w-4 h-4 text-slate-500"></i> 5. 標題、日期、頁碼與字型
+        </h2>
+
+        <div class="space-y-2.5">
+          <!-- 上傳自訂字體卡片 -->
+          <div class="p-3 bg-indigo-50/90 rounded-xl border-2 border-indigo-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                <i data-lucide="folder-up" class="w-3.5 h-3.5 text-indigo-600"></i> 上傳自訂字體 (.ttf / .otf / .woff)
+              </label>
+              <button id="clearFontBtn" onclick="clearCustomFont()" class="hidden text-[11px] text-red-500 hover:underline font-medium">還原預設</button>
+            </div>
+            <p class="text-[11px] text-indigo-700 leading-tight">支援上傳電腦或平板上的中英文字型檔，上傳後畫面上所有文字會立即全頁套用。</p>
+            <input type="file" id="customFontUpload" accept=".ttf,.otf,.woff,.woff2" onchange="handleFontUpload(event)" class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer w-full bg-white border border-indigo-200 rounded p-1">
+            <div id="fontStatusBadge" class="hidden flex items-center gap-1.5 text-xs text-emerald-700 font-medium pt-0.5">
+              <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span id="fontStatusText">已啟用自訂字體</span>
+            </div>
+          </div>
+
+          <!-- 字重粗細微調 -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">字重粗細 (Font Weight)</label>
+            <select id="fontWeightSelect" onchange="state.fontWeight=this.value; updateGenerator();" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500">
+              <option value="100">100 (極致極細 Ultra-Light)</option>
+              <option value="200" selected>200 (超細 Light)</option>
+              <option value="300">300 (細體 Normal-Light)</option>
+              <option value="400">400 (常規 Regular)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">內文字體風格 (Typography)</label>
+            <select id="fontFamilySelect" onchange="state.fontFamily=this.value; updateGenerator();" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500">
+              <option value="sans-light" selected>極細現代黑體 (Ultra-Light Sans / 無印風)</option>
+              <option value="serif-light">典雅細明體 (Fine Serif / 文學質感)</option>
+              <option value="rounded-light">柔和微圓體 (Soft Rounded / 療癒手帳)</option>
+              <option value="mono-light">極簡打字機 (Light Monospace / 理性工整)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <label class="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+              <input type="checkbox" id="enableHeader" checked onchange="updateGenerator()" class="rounded text-indigo-600 focus:ring-indigo-500">
+              <span>啟用頁首頂部欄 (Header)</span>
+            </label>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">頁首主題標題</label>
+            <input type="text" id="headerTitle" value="NOTE TITLE" oninput="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" id="headerDate" checked onchange="updateGenerator()" class="rounded text-indigo-600">
+              <span>日期橫線 (Date)</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" id="headerWeather" checked onchange="updateGenerator()" class="rounded text-indigo-600">
+              <span>天氣心情圖示</span>
+            </label>
+          </div>
+
+          <div class="pt-2 space-y-2 border-t border-slate-200">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">頁碼位置</label>
+              <select id="footerPageNum" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+                <option value="none">不顯示頁碼</option>
+                <option value="bottom-center" selected>頁尾底部置中</option>
+                <option value="bottom-right">頁尾右下角</option>
+                <option value="top-right">頁首右上角</option>
+              </select>
+            </div>
+
+            <div id="pageNumDetailControls" class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">頁碼前綴格式</label>
+                <select id="pageNumFormat" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+                  <option value="page-en" selected>PAGE: ______</option>
+                  <option value="page-zh">頁：______</option>
+                  <option value="dash">— 1 — (橫線括弧)</option>
+                  <option value="no">NO. ______</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">是否編號</label>
+                <select id="pageNumType" onchange="updateGenerator()" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+                  <option value="number" selected>自動填入數字 (1, 2...)</option>
+                  <option value="blank">留白手寫 (無數字)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部匯出操作區 (固定於面板下方) -->
+    <div class="p-4 border-t border-slate-200 bg-slate-50 flex-shrink-0 space-y-2.5">
+      <div class="flex items-center justify-between text-xs text-slate-600">
+        <span class="font-medium flex items-center gap-1">
+          <i data-lucide="file-down" class="w-4 h-4 text-indigo-600"></i> 匯出 PDF 檔案
+        </span>
+        <div class="flex items-center gap-1">
+          <span>匯出頁數:</span>
+          <select id="pdfPageCount" class="border border-slate-300 rounded bg-white px-1.5 py-0.5 text-xs font-semibold">
+            <option value="1" selected>1 頁 (單頁)</option>
+            <option value="5">5 頁</option>
+            <option value="10">10 頁</option>
+            <option value="20">20 頁 (隨身本)</option>
+            <option value="50">50 頁 (完整冊)</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="downloadPdfBtn" onclick="exportToPdf()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 text-sm">
+        <i data-lucide="download" class="w-4 h-4"></i>
+        <span>直接下載 PDF 檔案 (.pdf)</span>
+      </button>
+
+      <!-- 底部版權、作者與更新日期卡片 -->
+      <div class="pt-2 border-t border-slate-200/80 text-[11px] text-slate-500 flex flex-col gap-0.5 text-center leading-tight">
+        <div class="flex items-center justify-between text-slate-600 font-medium">
+          <span>製作: AI練習曲</span>
+          <span class="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">歡迎分享，請勿商用</span>
+        </div>
+        <div class="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+          <span>版本: v3.0 專業版</span>
+          <span id="appUpdatedDate">Updated: 2026.09.09</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== 右側紙張預覽畫布 ==================== -->
+  <main class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-slate-200/80">
+    
+    <!-- 預覽上方工具列 -->
+    <header class="no-print h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between z-10 flex-shrink-0 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 py-1 px-2.5 rounded-lg border border-slate-200">
+          <i data-lucide="maximize" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span id="dimensionDisplay">A4 (210 × 297 mm)</span>
+        </div>
+        <div id="patternBadge" class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium border border-indigo-100">
+          點陣筆記
+        </div>
+      </div>
+
+      <!-- 縮放控制項 -->
+      <div class="flex items-center gap-2">
+        <div class="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+          <button onclick="changeZoom(-0.1)" class="w-7 h-7 flex items-center justify-center hover:bg-white rounded text-slate-600 transition" title="縮小">-</button>
+          <span id="zoomLevelText" class="text-xs font-mono px-2 text-slate-700 font-semibold min-w-[48px] text-center">75%</span>
+          <button onclick="changeZoom(0.1)" class="w-7 h-7 flex items-center justify-center hover:bg-white rounded text-slate-600 transition" title="放大">+</button>
+        </div>
+        <button onclick="resetZoom()" class="px-2.5 py-1 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-slate-700 transition" title="適配螢幕">
+          重置適配
+        </button>
+      </div>
+    </header>
+
+    <!-- 預覽畫布中央包裝層 -->
+    <div class="preview-container flex-1 p-6 flex items-center justify-center overflow-auto relative">
+      <!-- 實體模擬紙張容器：增加 flex-shrink-0 防止彈性盒擠壓變形 -->
+      <div id="paperWrapper" class="paper-shadow transition-all duration-200 relative bg-white overflow-hidden rounded-sm flex-shrink-0">
+        <!-- SVG 動態生成核心 -->
+        <svg id="notebookSvg" xmlns="http://www.w3.org/2000/svg" class="w-full h-full block">
+          <!-- 濾鏡、圖案與背景 -->
+          <defs id="svgDefs"></defs>
+          <rect id="svgBackgroundRect" width="100%" height="100%" fill="#ffffff" />
+          <image id="svgBgImage" x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" opacity="0" />
+          <rect id="svgColorMask" width="100%" height="100%" fill="#000000" opacity="0" />
+          
+          <!-- 頁面核心群組 -->
+          <g id="svgContentRoot"></g>
+        </svg>
+      </div>
+    </div>
+  </main>
+
+  <!-- 全域 Toast 訊息浮層 -->
+  <div id="toast" class="no-print fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium z-50 flex items-center gap-2 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMsg">已套用設定</span>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       狀態管理與核心設定
+       ========================================================================== */
+    const state = {
+      pageSize: 'A4',
+      orientation: 'portrait',
+      margin: 12,
+      punchHoles: 'none',
+      gutter: 0,
+      patternType: 'dot',
+      fontFamily: 'sans-light',
+      fontWeight: '200',
+      customFontData: null,
+      customFontName: null,
+      
+      // 動態版型細部參數 (預設全面支援極細 1mm)
+      dotSpacing: 5,
+      gridSize: 5,
+      gridMajor: {
+        enabled: false,
+        subdiv: 5 // 2, 3, 4, 5
+      },
+      ruledSpacing: 7,
+      ruledStyle: 'solid',
+      ruledSub: {
+        enabled: false,
+        count: 3,        // 2, 3, 4 條細線
+        separate: true,  // 每組線是否分開
+        groupGap: 5      // 組間間隙 (mm)
+      },
+      music: {
+        lineSpacing: 1.8, // 五線譜五線之間的間距 (mm)
+        systemGap: 12     // 譜表之間的間距 (mm)
+      },
+      vertSpacing: 8,
+      hexSize: 5,
+      
+      // 作文原稿紙設定
+      manuscript: {
+        charsPerLine: 20, // 每行字數 (自訂 10~60)
+        boxSize: 8,       // 字格尺寸 (mm)
+        lineGap: 3.5      // 旁註/標點空白軌道間距 (mm)
+      },
+
+      // 一日一頁手帳日記設定
+      journalLang: 'zh',
+      journalModules: {
+        priorities: true,
+        checklist: true,
+        expenses: true,
+        mood: true,
+        water: true,
+        gratitude: true,
+        photo: true,
+        journalBody: true
+      },
+      journalRows: {
+        priorities: 3,
+        checklist: 5,
+        expenses: 4,
+        gratitude: 3,
+        photoHeight: 35
+      },
+
+      // 烘焙與烹飪食譜 (Recipe Sheet)
+      recipe: {
+        hasPhoto: true,
+        photoHeight: 45,
+        lang: 'zh',
+        ingredientsRows: 8,
+        stepCols: 6,
+        detailRows: 6
+      },
+
+      // 讀書筆記設定
+      book: {
+        hasQuotes: true,
+        quotesRows: 3,
+        hasAction: true,
+        actionRows: 3,
+        noteStyle: 'ruled'
+      },
+
+      // 電影心得設定
+      movie: {
+        posterHeight: 55,
+        hasQuotes: true,
+        quotesRows: 2
+      },
+
+      // 旅行日誌設定
+      travel: {
+        hasSchedule: true,
+        scheduleRows: 6,
+        hasExpenses: true,
+        expensesRows: 5,
+        hasPhoto: true,
+        photoHeight: 35
+      },
+
+      // 月計畫日曆設定
+      monthly: {
+        firstDay: 'mon',    // 'mon' 或 'sun'
+        notesPos: 'bottom', // 'bottom' 或 'right'
+        notesRows: 4        // 0~10 列
+      },
+
+      // 康乃爾參數
+      cornellCueWidth: 50,
+      cornellSummaryHeight: 45,
+      cornellGridType: 'ruled',
+
+      // 週計畫與月計畫
+      weeklyStyle: 'vertical',
+      weeklySubLines: 3,
+
+      // 線條外觀
+      lineColor: '#94a3b8',
+      lineWidth: 0.2,
+      lineOpacity: 0.85,
+
+      // 紙張底色與圖片遮罩
+      paperBg: '#ffffff',
+      bgImageData: null,
+      imgOpacity: 0.25,
+      maskColor: '#fefbf3',
+      maskOpacity: 0.4,
+
+      // 頁首與頁尾
+      enableHeader: true,
+      headerTitle: 'NOTE TITLE',
+      headerDate: true,
+      headerWeather: true,
+      footerPageNum: 'bottom-center',
+      pageNumFormat: 'page-en',
+      pageNumType: 'number'
+    };
+
+    let currentZoom = 0.75;
+
+    // 紙張毫米標準尺寸表
+    const DIMENSIONS = {
+      'A4': { w: 210, h: 297 },
+      'A5': { w: 148, h: 210 },
+      'B5': { w: 176, h: 250 },
+      'Letter': { w: 215.9, h: 279.4 },
+      'iPad': { w: 200, h: 266.6 },  // 4:3
+      'Wide': { w: 180, h: 320 },    // 16:9
+      'Eink': { w: 180, h: 288 }     // 16:10
+    };
+
+    function getPageDimensions() {
+      const base = DIMENSIONS[state.pageSize] || DIMENSIONS['A4'];
+      if (state.orientation === 'landscape') {
+        return { width: Math.max(base.w, base.h), height: Math.min(base.w, base.h) };
+      }
+      return { width: Math.min(base.w, base.h), height: Math.max(base.w, base.h) };
+    }
+
+    /* ==========================================================================
+       動態側邊控制項產生器 (依據所選格局動態產生 1mm~微調滑桿)
+       ========================================================================== */
+    function buildDynamicControls() {
+      const container = document.getElementById('dynamicPatternControls');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const p = state.patternType;
+
+      if (p === 'dot') {
+        container.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-medium text-slate-700">點點間距 (Dot Spacing)</span>
+              <span id="dotSpacingVal" class="text-xs font-mono font-medium text-indigo-600">${state.dotSpacing} mm</span>
+            </div>
+            <input type="range" min="1" max="15" step="0.5" value="${state.dotSpacing}" oninput="state.dotSpacing=parseFloat(this.value); document.getElementById('dotSpacingVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            <span class="text-[10px] text-slate-500">支援下探至 1mm，適合微型練習。</span>
+          </div>
+        `;
+      } else if (p === 'grid') {
+        const gm = state.gridMajor;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">小方格邊長 (Grid Size)</span>
+                <span id="gridSizeVal" class="text-xs font-mono font-medium text-indigo-600">${state.gridSize} mm</span>
+              </div>
+              <input type="range" min="1" max="20" step="0.5" value="${state.gridSize}" oninput="state.gridSize=parseFloat(this.value); document.getElementById('gridSizeVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+              <div class="flex gap-1.5 mt-2">
+                <button onclick="state.gridSize=1; buildDynamicControls(); updateGenerator();" class="px-2 py-0.5 text-[10px] bg-white border border-slate-300 rounded hover:bg-indigo-50">1mm 極細</button>
+                <button onclick="state.gridSize=3.5; buildDynamicControls(); updateGenerator();" class="px-2 py-0.5 text-[10px] bg-white border border-slate-300 rounded hover:bg-indigo-50">3.5mm 日本手帳</button>
+                <button onclick="state.gridSize=5; buildDynamicControls(); updateGenerator();" class="px-2 py-0.5 text-[10px] bg-white border border-slate-300 rounded hover:bg-indigo-50">5mm 標準</button>
+                <button onclick="state.gridSize=10; buildDynamicControls(); updateGenerator();" class="px-2 py-0.5 text-[10px] bg-white border border-slate-300 rounded hover:bg-indigo-50">10mm 大格</button>
+              </div>
+            </div>
+
+            <!-- 大方格加粗外框與細分選項 -->
+            <div class="p-2.5 bg-white rounded-lg border border-slate-200 space-y-2">
+              <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                <input type="checkbox" ${gm.enabled ? 'checked' : ''} onchange="state.gridMajor.enabled=this.checked; document.getElementById('gridSubdivWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                <span>啟用「大方格包小方格」（主線加粗）</span>
+              </label>
+
+              <div id="gridSubdivWrap" class="${gm.enabled ? '' : 'hidden'} space-y-2 pt-1 border-t border-slate-100">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] text-slate-600">大方格劃分小方格</span>
+                  <select onchange="state.gridMajor.subdiv=parseInt(this.value); updateGenerator();" class="text-xs border border-slate-300 rounded px-1.5 py-0.5 bg-slate-50 font-medium">
+                    <option value="2" ${gm.subdiv===2?'selected':''}>2 × 2</option>
+                    <option value="3" ${gm.subdiv===3?'selected':''}>3 × 3 (九宮格)</option>
+                    <option value="4" ${gm.subdiv===4?'selected':''}>4 × 4</option>
+                    <option value="5" ${gm.subdiv===5?'selected':''}>5 × 5 (工程方格)</option>
+                  </select>
+                </div>
+                <p class="text-[10px] text-slate-400 leading-tight">每隔選定格數繪製一條微粗主線，便於視覺定位與層次筆記。</p>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'ruled') {
+        const rsub = state.ruledSub;
+        container.innerHTML = `
+          <div class="space-y-2.5">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">細線行距 (Line Spacing)</span>
+                <span id="ruledSpacingVal" class="text-xs font-mono font-medium text-indigo-600">${state.ruledSpacing} mm</span>
+              </div>
+              <input type="range" min="1" max="20" step="0.5" value="${state.ruledSpacing}" oninput="state.ruledSpacing=parseFloat(this.value); document.getElementById('ruledSpacingVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">橫線樣式</label>
+              <select onchange="state.ruledStyle=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="solid" ${state.ruledStyle==='solid'?'selected':''}>標準實線</option>
+                <option value="dashed" ${state.ruledStyle==='dashed'?'selected':''}>虛線 (Dashed)</option>
+                <option value="dotted" ${state.ruledStyle==='dotted'?'selected':''}>點狀線 (Dotted)</option>
+                <option value="english-four" ${state.ruledStyle==='english-four'?'selected':''}>英文四線三格 (English 4-Lines)</option>
+              </select>
+            </div>
+
+            <!-- 微粗橫線中包 2~4 條細橫線選項 -->
+            <div class="p-2.5 bg-white rounded-lg border border-slate-200 space-y-2 pt-2">
+              <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                <input type="checkbox" ${rsub.enabled ? 'checked' : ''} onchange="state.ruledSub.enabled=this.checked; document.getElementById('ruledSubControls').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                <span>啟用「微粗橫線包細橫線組」</span>
+              </label>
+
+              <div id="ruledSubControls" class="${rsub.enabled ? '' : 'hidden'} space-y-2 pt-1 border-t border-slate-100">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] text-slate-600">每組內部細橫線條數</span>
+                  <select onchange="state.ruledSub.count=parseInt(this.value); updateGenerator();" class="text-xs border border-slate-300 rounded px-1.5 py-0.5 bg-slate-50 font-medium">
+                    <option value="2" ${rsub.count===2?'selected':''}>2 條細線</option>
+                    <option value="3" ${rsub.count===3?'selected':''}>3 條細線</option>
+                    <option value="4" ${rsub.count===4?'selected':''}>4 條細線</option>
+                  </select>
+                </div>
+
+                <label class="flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <input type="checkbox" ${rsub.separate ? 'checked' : ''} onchange="state.ruledSub.separate=this.checked; document.getElementById('groupGapBox').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>每組線條分開（附組間間隙）</span>
+                </label>
+
+                <div id="groupGapBox" class="${rsub.separate ? '' : 'hidden'}">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-[10px] text-slate-500">組與組間隙距離</span>
+                    <span id="groupGapVal" class="text-[10px] font-mono text-indigo-600">${rsub.groupGap} mm</span>
+                  </div>
+                  <input type="range" min="2" max="15" step="0.5" value="${rsub.groupGap}" oninput="state.ruledSub.groupGap=parseFloat(this.value); document.getElementById('groupGapVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'music') {
+        const mc = state.music;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 text-[11px] text-indigo-900">
+              🎼 <strong>音樂五線譜 (Music Staff)</strong>：標準五線向量繪製，左右附封閉小節線。
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">五線間隔 (Line Spacing)</span>
+                <span id="musicSpacingVal" class="text-xs font-mono font-medium text-indigo-600">${mc.lineSpacing} mm</span>
+              </div>
+              <input type="range" min="1.0" max="4.0" step="0.1" value="${mc.lineSpacing}" oninput="state.music.lineSpacing=parseFloat(this.value); document.getElementById('musicSpacingVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+              <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                <span>1.0 mm (迷你袖珍)</span>
+                <span>1.8 mm (標準)</span>
+                <span>4.0 mm (初學大譜)</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">譜表行間距 (Stave Gap)</span>
+                <span id="musicGapVal" class="text-xs font-mono font-medium text-indigo-600">${mc.systemGap} mm</span>
+              </div>
+              <input type="range" min="6" max="25" step="0.5" value="${mc.systemGap}" oninput="state.music.systemGap=parseFloat(this.value); document.getElementById('musicGapVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+          </div>
+        `;
+      } else if (p === 'manuscript') {
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">每行字數 (Chars per line)</span>
+                <span id="charsPerLineVal" class="text-xs font-mono font-medium text-indigo-600">${state.manuscript.charsPerLine} 字</span>
+              </div>
+              <input type="range" min="10" max="50" step="1" value="${state.manuscript.charsPerLine}" oninput="state.manuscript.charsPerLine=parseInt(this.value); document.getElementById('charsPerLineVal').innerText=this.value+' 字'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">字格大小 (Box Size)</span>
+                <span id="msBoxVal" class="text-xs font-mono font-medium text-indigo-600">${state.manuscript.boxSize} mm</span>
+              </div>
+              <input type="range" min="4" max="15" step="0.5" value="${state.manuscript.boxSize}" oninput="state.manuscript.boxSize=parseFloat(this.value); document.getElementById('msBoxVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">行間空白軌距 (Line Gap)</span>
+                <span id="msGapVal" class="text-xs font-mono font-medium text-indigo-600">${state.manuscript.lineGap} mm</span>
+              </div>
+              <input type="range" min="1" max="10" step="0.5" value="${state.manuscript.lineGap}" oninput="state.manuscript.lineGap=parseFloat(this.value); document.getElementById('msGapVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+          </div>
+        `;
+      } else if (p === 'journal') {
+        const jm = state.journalModules;
+        const jr = state.journalRows;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">語言設定 (Language)</label>
+              <select onchange="state.journalLang=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="zh" ${state.journalLang==='zh'?'selected':''}>繁體中文</option>
+                <option value="en" ${state.journalLang==='en'?'selected':''}>English</option>
+                <option value="bilingual" ${state.journalLang==='bilingual'?'selected':''}>中英雙語 (Bilingual)</option>
+              </select>
+            </div>
+
+            <div class="space-y-2.5 text-xs text-slate-700 border-t border-slate-200 pt-2">
+              <!-- 今日重點 -->
+              <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" ${jm.priorities ? 'checked' : ''} onchange="state.journalModules.priorities=this.checked; document.getElementById('rowPrioritiesWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                    <span>★ 今日要事 (Priorities)</span>
+                  </label>
+                  <span id="prioritiesRowVal" class="font-mono text-[11px] text-indigo-600">${jr.priorities} 列</span>
+                </div>
+                <div id="rowPrioritiesWrap" class="${jm.priorities ? '' : 'hidden'}">
+                  <input type="range" min="1" max="6" value="${jr.priorities}" oninput="state.journalRows.priorities=parseInt(this.value); document.getElementById('prioritiesRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+
+              <!-- 待辦清單 -->
+              <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" ${jm.checklist ? 'checked' : ''} onchange="state.journalModules.checklist=this.checked; document.getElementById('rowChecklistWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                    <span>☑ 待辦清單 (Checklist)</span>
+                  </label>
+                  <span id="checklistRowVal" class="font-mono text-[11px] text-indigo-600">${jr.checklist} 列</span>
+                </div>
+                <div id="rowChecklistWrap" class="${jm.checklist ? '' : 'hidden'}">
+                  <input type="range" min="2" max="10" value="${jr.checklist}" oninput="state.journalRows.checklist=parseInt(this.value); document.getElementById('checklistRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+
+              <!-- 今日感恩 -->
+              <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" ${jm.gratitude ? 'checked' : ''} onchange="state.journalModules.gratitude=this.checked; document.getElementById('rowGratitudeWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                    <span>❤ 今日感恩 (Gratitude)</span>
+                  </label>
+                  <span id="gratitudeRowVal" class="font-mono text-[11px] text-indigo-600">${jr.gratitude} 列</span>
+                </div>
+                <div id="rowGratitudeWrap" class="${jm.gratitude ? '' : 'hidden'}">
+                  <input type="range" min="1" max="6" value="${jr.gratitude}" oninput="state.journalRows.gratitude=parseInt(this.value); document.getElementById('gratitudeRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+
+              <!-- 拍立得相片框 -->
+              <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" ${jm.photo ? 'checked' : ''} onchange="state.journalModules.photo=this.checked; document.getElementById('photoHeightWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                    <span>📷 相片/拍立得框 (Photo)</span>
+                  </label>
+                  <span id="photoHeightVal" class="font-mono text-[11px] text-indigo-600">${jr.photoHeight} mm</span>
+                </div>
+                <div id="photoHeightWrap" class="${jm.photo ? '' : 'hidden'}">
+                  <input type="range" min="20" max="60" step="5" value="${jr.photoHeight}" oninput="state.journalRows.photoHeight=parseInt(this.value); document.getElementById('photoHeightVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+
+              <!-- 收支記帳 -->
+              <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" ${jm.expenses ? 'checked' : ''} onchange="state.journalModules.expenses=this.checked; document.getElementById('rowExpensesWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                    <span>💰 收支記帳 (Expenses)</span>
+                  </label>
+                  <span id="expensesRowVal" class="font-mono text-[11px] text-indigo-600">${jr.expenses} 列</span>
+                </div>
+                <div id="rowExpensesWrap" class="${jm.expenses ? '' : 'hidden'}">
+                  <input type="range" min="2" max="8" value="${jr.expenses}" oninput="state.journalRows.expenses=parseInt(this.value); document.getElementById('expensesRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+                </div>
+              </div>
+
+              <!-- 心情與飲水 -->
+              <div class="grid grid-cols-2 gap-2 pt-1">
+                <label class="flex items-center gap-1.5 p-1.5 bg-white rounded border border-slate-200">
+                  <input type="checkbox" ${jm.mood ? 'checked' : ''} onchange="state.journalModules.mood=this.checked; updateGenerator();" class="rounded text-indigo-600">
+                  <span>心情/天氣打卡</span>
+                </label>
+                <label class="flex items-center gap-1.5 p-1.5 bg-white rounded border border-slate-200">
+                  <input type="checkbox" ${jm.water ? 'checked' : ''} onchange="state.journalModules.water=this.checked; updateGenerator();" class="rounded text-indigo-600">
+                  <span>飲水追蹤打卡</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'recipe') {
+        const rc = state.recipe;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-amber-50 p-2.5 rounded-lg text-[11px] text-amber-900 border border-amber-200">
+              🍳 <strong>烘焙與烹飪食譜設定</strong>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">顯示語言 (Language)</label>
+              <select onchange="state.recipe.lang=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="zh" ${rc.lang==='zh'?'selected':''}>繁體中文</option>
+                <option value="en" ${rc.lang==='en'?'selected':''}>English</option>
+                <option value="bilingual" ${rc.lang==='bilingual'?'selected':''}>中英雙語 (Bilingual)</option>
+              </select>
+            </div>
+
+            <div class="space-y-2 border-t border-slate-200 pt-2">
+              <label class="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                <input type="checkbox" id="recipeHasPhotoCheck" ${rc.hasPhoto ? 'checked' : ''} onchange="state.recipe.hasPhoto=this.checked; document.getElementById('recipePhotoHBox').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                <span>啟用頂部「成品照片」框</span>
+              </label>
+
+              <div id="recipePhotoHBox" class="${rc.hasPhoto ? '' : 'hidden'} pl-4">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[11px] text-slate-600">照片框高度</span>
+                  <span id="recipePhotoVal" class="text-[11px] font-mono font-medium text-indigo-600">${rc.photoHeight} mm</span>
+                </div>
+                <input type="range" min="25" max="75" step="5" value="${rc.photoHeight}" oninput="state.recipe.photoHeight=parseInt(this.value); document.getElementById('recipePhotoVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+
+            <!-- 材料清單列數滑桿 -->
+            <div class="border-t border-slate-200 pt-2">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">材料配方表格列數</span>
+                <span id="recipeIngVal" class="text-xs font-mono font-medium text-indigo-600">${rc.ingredientsRows || 8} 列</span>
+              </div>
+              <input type="range" min="3" max="18" step="1" value="${rc.ingredientsRows || 8}" oninput="state.recipe.ingredientsRows=parseInt(this.value); document.getElementById('recipeIngVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+
+            <!-- 作法步驟欄數滑桿 -->
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">作法步驟並排欄數</span>
+                <span id="recipeStepVal" class="text-xs font-mono font-medium text-indigo-600">${rc.stepCols || 6} 欄</span>
+              </div>
+              <input type="range" min="3" max="8" step="1" value="${rc.stepCols || 6}" oninput="state.recipe.stepCols=parseInt(this.value); document.getElementById('recipeStepVal').innerText=this.value+' 欄'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+
+            <div class="border-t border-slate-200 pt-2">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">下方詳細作法步驟列數</span>
+                <span id="recipeDetailVal" class="text-xs font-mono font-medium text-indigo-600">${rc.detailRows} 列</span>
+              </div>
+              <input type="range" min="0" max="20" step="1" value="${rc.detailRows}" oninput="state.recipe.detailRows=parseInt(this.value); document.getElementById('recipeDetailVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                <span>0 (無詳細步驟)</span>
+                <span>10 列</span>
+                <span>20 列 (多步驟)</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'book') {
+        const bk = state.book;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-indigo-50 p-2.5 rounded-lg text-[11px] text-indigo-900 border border-indigo-100">
+              📚 <strong>精進讀書筆記 (Book Review)</strong> 區塊列數設定
+            </div>
+
+            <!-- 金句摘錄列數 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${bk.hasQuotes ? 'checked' : ''} onchange="state.book.hasQuotes=this.checked; document.getElementById('bookQuotesRowWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>❝ 核心金句摘錄 (Quotes)</span>
+                </label>
+                <span id="bookQuotesRowVal" class="font-mono text-[11px] text-indigo-600">${bk.quotesRows || 3} 列</span>
+              </div>
+              <div id="bookQuotesRowWrap" class="${bk.hasQuotes ? '' : 'hidden'}">
+                <input type="range" min="1" max="8" value="${bk.quotesRows || 3}" oninput="state.book.quotesRows=parseInt(this.value); document.getElementById('bookQuotesRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+
+            <!-- 行動清單列數 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${bk.hasAction ? 'checked' : ''} onchange="state.book.hasAction=this.checked; document.getElementById('bookActionRowWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>🚀 知行合一行動計畫 (Action Plan)</span>
+                </label>
+                <span id="bookActionRowVal" class="font-mono text-[11px] text-indigo-600">${bk.actionRows || 3} 列</span>
+              </div>
+              <div id="bookActionRowWrap" class="${bk.hasAction ? '' : 'hidden'}">
+                <input type="range" min="1" max="8" value="${bk.actionRows || 3}" oninput="state.book.actionRows=parseInt(this.value); document.getElementById('bookActionRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">主讀書心得底紋</label>
+              <select onchange="state.book.noteStyle=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="ruled" ${state.book.noteStyle==='ruled'?'selected':''}>橫線底紋 (Ruled)</option>
+                <option value="dot" ${state.book.noteStyle==='dot'?'selected':''}>微點陣 (Dot Grid)</option>
+                <option value="blank" ${state.book.noteStyle==='blank'?'selected':''}>純白空白 (Blank)</option>
+              </select>
+            </div>
+          </div>
+        `;
+      } else if (p === 'movie') {
+        const mv = state.movie;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-purple-50 p-2.5 rounded-lg text-[11px] text-purple-900 border border-purple-100">
+              🎬 <strong>影評與觀影手帳 (Movie Review)</strong> 區塊列數設定
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">海報框高度 (Poster Height)</span>
+                <span id="posterHVal" class="text-xs font-mono text-indigo-600 font-medium">${mv.posterHeight} mm</span>
+              </div>
+              <input type="range" min="35" max="80" step="5" value="${mv.posterHeight}" oninput="state.movie.posterHeight=parseInt(this.value); document.getElementById('posterHVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+
+            <!-- 經典台詞金句列數 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${mv.hasQuotes ? 'checked' : ''} onchange="state.movie.hasQuotes=this.checked; document.getElementById('movieQuotesRowWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>❝ 經典台詞金句 (Quotes)</span>
+                </label>
+                <span id="movieQuotesRowVal" class="font-mono text-[11px] text-indigo-600">${mv.quotesRows || 2} 列</span>
+              </div>
+              <div id="movieQuotesRowWrap" class="${mv.hasQuotes ? '' : 'hidden'}">
+                <input type="range" min="1" max="6" value="${mv.quotesRows || 2}" oninput="state.movie.quotesRows=parseInt(this.value); document.getElementById('movieQuotesRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'travel') {
+        const tv = state.travel;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-emerald-50 p-2.5 rounded-lg text-[11px] text-emerald-900 border border-emerald-100">
+              ✈ <strong>旅行探索日誌 (Travel Journal)</strong> 區塊列數設定
+            </div>
+
+            <!-- 時間軸行程表列數 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${tv.hasSchedule ? 'checked' : ''} onchange="state.travel.hasSchedule=this.checked; document.getElementById('travelSchedRowWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>⏰ 時間軸行程清單 (Schedule)</span>
+                </label>
+                <span id="travelSchedRowVal" class="font-mono text-[11px] text-indigo-600">${tv.scheduleRows || 6} 列</span>
+              </div>
+              <div id="travelSchedRowWrap" class="${tv.hasSchedule ? '' : 'hidden'}">
+                <input type="range" min="2" max="14" value="${tv.scheduleRows || 6}" oninput="state.travel.scheduleRows=parseInt(this.value); document.getElementById('travelSchedRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+
+            <!-- 當日旅行花費記帳列數 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${tv.hasExpenses ? 'checked' : ''} onchange="state.travel.hasExpenses=this.checked; document.getElementById('travelExpRowWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>💰 當日旅行花費記帳 (Expenses)</span>
+                </label>
+                <span id="travelExpRowVal" class="font-mono text-[11px] text-indigo-600">${tv.expensesRows || 5} 列</span>
+              </div>
+              <div id="travelExpRowWrap" class="${tv.hasExpenses ? '' : 'hidden'}">
+                <input type="range" min="2" max="10" value="${tv.expensesRows || 5}" oninput="state.travel.expensesRows=parseInt(this.value); document.getElementById('travelExpRowVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+
+            <!-- 相片 / 門票票根高度 -->
+            <div class="p-2 bg-white rounded border border-slate-200 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                  <input type="checkbox" ${tv.hasPhoto ? 'checked' : ''} onchange="state.travel.hasPhoto=this.checked; document.getElementById('travelPhotoWrap').classList.toggle('hidden', !this.checked); updateGenerator();" class="rounded text-indigo-600">
+                  <span>📷 相片 / 門票票根黏貼框</span>
+                </label>
+                <span id="travelPhotoHVal" class="font-mono text-[11px] text-indigo-600">${tv.photoHeight || 35} mm</span>
+              </div>
+              <div id="travelPhotoWrap" class="${tv.hasPhoto ? '' : 'hidden'}">
+                <input type="range" min="20" max="60" step="5" value="${tv.photoHeight || 35}" oninput="state.travel.photoHeight=parseInt(this.value); document.getElementById('travelPhotoHVal').innerText=this.value+' mm'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (p === 'monthly') {
+        const isLandscape = state.orientation === 'landscape';
+        const mo = state.monthly || (state.monthly = { firstDay: 'mon', notesPos: 'bottom', notesRows: 4 });
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">一週起始日</label>
+              <select onchange="state.monthly.firstDay=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="mon" ${mo.firstDay === 'mon' ? 'selected' : ''}>週一開始 (MON ~ SUN)</option>
+                <option value="sun" ${mo.firstDay === 'sun' ? 'selected' : ''}>週日開始 (SUN ~ SAT)</option>
+              </select>
+            </div>
+
+            ${isLandscape ? `
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">備註欄位置 (橫向專屬)</label>
+                <select onchange="state.monthly.notesPos=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                  <option value="bottom" ${mo.notesPos === 'bottom' ? 'selected' : ''}>下方備註欄</option>
+                  <option value="right" ${mo.notesPos === 'right' ? 'selected' : ''}>右方備註欄 (側欄)</option>
+                </select>
+              </div>
+            ` : ''}
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">備註待辦列數</span>
+                <span id="monthlyNotesVal" class="text-xs font-mono font-medium text-indigo-600">${mo.notesRows} 列</span>
+              </div>
+              <input type="range" min="0" max="10" step="1" value="${mo.notesRows}" oninput="state.monthly.notesRows=parseInt(this.value); document.getElementById('monthlyNotesVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              <span class="text-[10px] text-slate-500">設為 0 則不顯示備註欄，月曆填滿全頁。</span>
+            </div>
+          </div>
+        `;
+      } else if (p === 'weekly') {
+        container.innerHTML = `
+          <div class="space-y-2">
+            <label class="block text-xs font-medium text-slate-700 mb-1">周計畫版式</label>
+            <select onchange="state.weeklyStyle=this.value; buildDynamicControls(); updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+              <option value="vertical" ${state.weeklyStyle==='vertical'?'selected':''}>垂直 7 欄直式排版 (日式時間軸)</option>
+              <option value="horizontal" ${state.weeklyStyle==='horizontal'?'selected':''}>左右分頁橫向 7 天排版</option>
+            </select>
+            ${state.weeklyStyle === 'horizontal' ? `
+              <div class="pt-2 border-t border-slate-200">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-xs font-medium text-slate-700">每日內部橫線列數</span>
+                  <span id="weeklySubLinesVal" class="text-xs font-mono text-indigo-600">${state.weeklySubLines || 3} 列</span>
+                </div>
+                <input type="range" min="1" max="8" value="${state.weeklySubLines || 3}" oninput="state.weeklySubLines=parseInt(this.value); document.getElementById('weeklySubLinesVal').innerText=this.value+' 列'; updateGenerator();" class="w-full accent-indigo-600">
+              </div>
+            ` : ''}
+          </div>
+        `;
+      } else if (p === 'cornell') {
+        container.innerHTML = `
+          <div class="space-y-2">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">左側提示欄寬 (Cue Column)</span>
+                <span class="text-xs font-mono text-indigo-600">${state.cornellCueWidth} mm</span>
+              </div>
+              <input type="range" min="30" max="80" value="${state.cornellCueWidth}" oninput="state.cornellCueWidth=parseFloat(this.value); updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-medium text-slate-700">底部總結欄高 (Summary)</span>
+                <span class="text-xs font-mono text-indigo-600">${state.cornellSummaryHeight} mm</span>
+              </div>
+              <input type="range" min="25" max="70" value="${state.cornellSummaryHeight}" oninput="state.cornellSummaryHeight=parseFloat(this.value); updateGenerator();" class="w-full accent-indigo-600">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">主筆記區底紋</label>
+              <select onchange="state.cornellGridType=this.value; updateGenerator();" class="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="ruled" ${state.cornellGridType==='ruled'?'selected':''}>橫線 (7mm)</option>
+                <option value="dot" ${state.cornellGridType==='dot'?'selected':''}>點陣 (5mm)</option>
+                <option value="grid" ${state.cornellGridType==='grid'?'selected':''}>方格 (5mm)</option>
+                <option value="blank" ${state.cornellGridType==='blank'?'selected':''}>純白留空</option>
+              </select>
+            </div>
+          </div>
+        `;
+      } else if (p === 'vertical-ruled') {
+        container.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-medium text-slate-700">直行間距 (Vertical Spacing)</span>
+              <span class="text-xs font-mono text-indigo-600">${state.vertSpacing} mm</span>
+            </div>
+            <input type="range" min="1" max="20" step="0.5" value="${state.vertSpacing}" oninput="state.vertSpacing=parseFloat(this.value); updateGenerator();" class="w-full accent-indigo-600">
+            <span class="text-[10px] text-slate-500">適合書法練字、信箋或直式手寫筆記。</span>
+          </div>
+        `;
+      } else if (p === 'hexagon') {
+        container.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-medium text-slate-700">六角邊長 (Hexagon Size)</span>
+              <span class="text-xs font-mono text-indigo-600">${state.hexSize} mm</span>
+            </div>
+            <input type="range" min="1" max="15" step="0.5" value="${state.hexSize}" oninput="state.hexSize=parseFloat(this.value); updateGenerator();" class="w-full accent-indigo-600">
+            <span class="text-[10px] text-slate-500">有機化學結構式、TRPG 跑團地圖專用。</span>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `<span class="text-xs text-slate-500">純白空白畫布，無需額外線條參數。</span>`;
+      }
+    }
+
+    function setOrientation(orient) {
+      state.orientation = orient;
+      const btnPort = document.getElementById('orientPortrait');
+      const btnLand = document.getElementById('orientLandscape');
+      if (orient === 'portrait') {
+        btnPort.className = 'py-1 text-xs font-medium rounded bg-white text-indigo-700 shadow-sm';
+        btnLand.className = 'py-1 text-xs font-medium rounded text-slate-600 hover:text-slate-900';
+      } else {
+        btnLand.className = 'py-1 text-xs font-medium rounded bg-white text-indigo-700 shadow-sm';
+        btnPort.className = 'py-1 text-xs font-medium rounded text-slate-600 hover:text-slate-900';
+      }
+      buildDynamicControls();
+      updateGenerator();
+      fitInitialZoom();
+    }
+
+    function changeZoom(delta) {
+      currentZoom = Math.min(Math.max(0.2, currentZoom + delta), 2.0);
+      applyZoom();
+    }
+
+    function resetZoom() {
+      fitInitialZoom();
+    }
+
+    function fitInitialZoom() {
+      const container = document.querySelector('.preview-container');
+      if (!container) return;
+
+      const { width, height } = getPageDimensions();
+      const pixelW = width * 3.7795;
+      const pixelH = height * 3.7795;
+
+      const availW = Math.max(100, container.clientWidth - 50);
+      const availH = Math.max(100, (window.innerHeight - 80) - 50);
+
+      const scaleX = availW / pixelW;
+      const scaleY = availH / pixelH;
+
+      currentZoom = Math.max(0.25, Math.min(scaleX, scaleY, 1.05));
+      applyZoom();
+    }
+
+    function applyZoom() {
+      const txt = document.getElementById('zoomLevelText');
+      if (txt) txt.innerText = `${Math.round(currentZoom * 100)}%`;
+      const wrapper = document.getElementById('paperWrapper');
+      if (!wrapper) return;
+      wrapper.style.transform = `scale(${currentZoom})`;
+      wrapper.style.transformOrigin = 'center center';
+    }
+
+    function onPatternChange() {
+      const sel = document.getElementById('patternType');
+      if (sel) state.patternType = sel.value;
+      buildDynamicControls();
+      updateGenerator();
+    }
+
+    function setPaperColor(hex, isDark = false) {
+      state.paperBg = hex;
+      const input = document.getElementById('paperBgColor');
+      if (input) input.value = hex;
+      const hexSpan = document.getElementById('paperBgHex');
+      if (hexSpan) hexSpan.innerText = hex.toUpperCase();
+
+      if (isDark) {
+        state.lineColor = '#ffffff';
+        state.lineOpacity = 0.7;
+        const lc = document.getElementById('lineColor');
+        if (lc) lc.value = '#ffffff';
+      }
+      updateGenerator();
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        state.bgImageData = event.target.result;
+        const ctrl = document.getElementById('bgImageControls');
+        if (ctrl) ctrl.classList.remove('hidden');
+        const clearBtn = document.getElementById('clearBgImgBtn');
+        if (clearBtn) clearBtn.classList.remove('hidden');
+        updateGenerator();
+        showToast('已成功上傳自訂底圖！');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearBgImage() {
+      state.bgImageData = null;
+      const fileInput = document.getElementById('bgImageUpload');
+      if (fileInput) fileInput.value = '';
+      const ctrl = document.getElementById('bgImageControls');
+      if (ctrl) ctrl.classList.add('hidden');
+      const clearBtn = document.getElementById('clearBgImgBtn');
+      if (clearBtn) clearBtn.classList.add('hidden');
+      updateGenerator();
+      showToast('已移除背景底圖');
+    }
+
+    /* ==========================================================================
+       自訂字體上傳與嵌入處理
+       ========================================================================== */
+    function handleFontUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const dataUrl = event.target.result;
+        state.customFontData = dataUrl;
+        state.customFontName = file.name.replace(/\.[^/.]+$/, "");
+
+        try {
+          // 動態註冊瀏覽器 DOM FontFace
+          const fontFace = new FontFace('CustomUploadedFont', `url(${dataUrl})`);
+          await fontFace.load();
+          document.fonts.add(fontFace);
+        } catch (err) {
+          console.warn('FontFace API 載入提示:', err);
+        }
+
+        updateFontUI();
+        updateGenerator();
+        showToast(`已成功套用自訂字體：${file.name}`);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearCustomFont() {
+      state.customFontData = null;
+      state.customFontName = null;
+      const input = document.getElementById('customFontUpload');
+      if (input) input.value = '';
+      updateFontUI();
+      updateGenerator();
+      showToast('已還原為預設字體');
+    }
+
+    function updateFontUI() {
+      const badge = document.getElementById('fontStatusBadge');
+      const text = document.getElementById('fontStatusText');
+      const clearBtn = document.getElementById('clearFontBtn');
+      const familySelect = document.getElementById('fontFamilySelect');
+
+      if (state.customFontData) {
+        if (badge) badge.classList.remove('hidden');
+        if (text) text.innerText = `已啟用：${state.customFontName}`;
+        if (clearBtn) clearBtn.classList.remove('hidden');
+        if (familySelect) familySelect.disabled = true;
+      } else {
+        if (badge) badge.classList.add('hidden');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        if (familySelect) familySelect.disabled = false;
+      }
+      lucide.createIcons();
+    }
+
+    /* ==========================================================================
+       SVG 主生成核心 (依據 mm 精確定位向量節點)
+       ========================================================================== */
+    function updateGenerator() {
+      // 讀取一般選項
+      const psEl = document.getElementById('pageSize');
+      if (psEl) state.pageSize = psEl.value;
+
+      const pmEl = document.getElementById('pageMargin');
+      if (pmEl) {
+        state.margin = parseFloat(pmEl.value);
+        const mv = document.getElementById('marginVal');
+        if (mv) mv.innerText = `${state.margin} mm`;
+      }
+
+      const phEl = document.getElementById('punchHoles');
+      if (phEl) state.punchHoles = phEl.value;
+
+      const gtEl = document.getElementById('gutter');
+      if (gtEl) state.gutter = parseFloat(gtEl.value);
+
+      const lcEl = document.getElementById('lineColor');
+      if (lcEl) state.lineColor = lcEl.value;
+
+      const lwEl = document.getElementById('lineWidth');
+      if (lwEl) state.lineWidth = parseFloat(lwEl.value);
+
+      const loEl = document.getElementById('lineOpacity');
+      if (loEl) {
+        state.lineOpacity = parseFloat(loEl.value) / 100;
+        const lov = document.getElementById('lineOpacityVal');
+        if (lov) lov.innerText = `${loEl.value}%`;
+      }
+
+      const ehEl = document.getElementById('enableHeader');
+      if (ehEl) state.enableHeader = ehEl.checked;
+
+      const htEl = document.getElementById('headerTitle');
+      if (htEl) state.headerTitle = htEl.value;
+
+      const hdEl = document.getElementById('headerDate');
+      if (hdEl) state.headerDate = hdEl.checked;
+
+      const hwEl = document.getElementById('headerWeather');
+      if (hwEl) state.headerWeather = hwEl.checked;
+
+      const fpEl = document.getElementById('footerPageNum');
+      if (fpEl) {
+        state.footerPageNum = fpEl.value;
+        const detailBox = document.getElementById('pageNumDetailControls');
+        if (detailBox) detailBox.classList.toggle('hidden', state.footerPageNum === 'none');
+      }
+
+      const pnfEl = document.getElementById('pageNumFormat');
+      if (pnfEl) state.pageNumFormat = pnfEl.value;
+
+      const pntEl = document.getElementById('pageNumType');
+      if (pntEl) state.pageNumType = pntEl.value;
+
+      const fwEl = document.getElementById('fontWeightSelect');
+      if (fwEl) state.fontWeight = fwEl.value;
+
+      const ffEl = document.getElementById('fontFamilySelect');
+      if (ffEl) state.fontFamily = ffEl.value;
+
+      const imoEl = document.getElementById('imgOpacity');
+      if (imoEl) {
+        state.imgOpacity = parseFloat(imoEl.value) / 100;
+        const imov = document.getElementById('imgOpacityVal');
+        if (imov) imov.innerText = `${imoEl.value}%`;
+      }
+
+      const mcEl = document.getElementById('maskColor');
+      if (mcEl) state.maskColor = mcEl.value;
+
+      const moEl = document.getElementById('maskOpacity');
+      if (moEl) state.maskOpacity = parseFloat(moEl.value) / 100;
+
+      // 取得真實紙張尺寸 (mm)
+      const { width, height } = getPageDimensions();
+
+      // 更新頂部顯示資訊
+      const dimDisplay = document.getElementById('dimensionDisplay');
+      if (dimDisplay) dimDisplay.innerText = `${state.pageSize} (${Math.round(width)} × ${Math.round(height)} mm)`;
+
+      // 設定 SVG 與紙張外容器大小
+      const svg = document.getElementById('notebookSvg');
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', `${width}mm`);
+      svg.setAttribute('height', `${height}mm`);
+
+      // 字體注入：支援使用者自訂 base64 字體與 Google Fonts 思源系列
+      const defs = document.getElementById('svgDefs');
+      let fontStyleEl = document.getElementById('svgEmbeddedFont');
+      if (!fontStyleEl) {
+        fontStyleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+        fontStyleEl.id = 'svgEmbeddedFont';
+        defs.appendChild(fontStyleEl);
+      }
+
+      let chosenFontFamily = "'Noto Sans TC', 'Inter', sans-serif";
+      if (state.customFontData) {
+        chosenFontFamily = "'CustomUploadedFont', 'Noto Sans TC', sans-serif";
+        fontStyleEl.textContent = `
+          @font-face {
+            font-family: 'CustomUploadedFont';
+            src: url('${state.customFontData}');
+          }
+          text {
+            font-family: 'CustomUploadedFont', 'Noto Sans TC', sans-serif !important;
+            font-weight: ${state.fontWeight} !important;
+            stroke: none !important;
+          }
+        `;
+      } else {
+        if (state.fontFamily === 'serif-light') {
+          chosenFontFamily = "'Noto Serif TC', serif";
+        } else if (state.fontFamily === 'rounded-light') {
+          chosenFontFamily = "'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif";
+        } else if (state.fontFamily === 'mono-light') {
+          chosenFontFamily = "'JetBrains Mono', 'Noto Sans TC', monospace";
+        } else {
+          chosenFontFamily = "'Noto Sans TC', 'Inter', sans-serif";
+        }
+        fontStyleEl.textContent = `
+          text {
+            font-family: ${chosenFontFamily} !important;
+            font-weight: ${state.fontWeight} !important;
+            stroke: none !important;
+          }
+        `;
+      }
+      svg.style.fontFamily = chosenFontFamily;
+
+      const wrapper = document.getElementById('paperWrapper');
+      const pixelW = width * 3.7795;
+      const pixelH = height * 3.7795;
+
+      wrapper.style.width = `${pixelW}px`;
+      wrapper.style.height = `${pixelH}px`;
+      wrapper.style.minWidth = `${pixelW}px`;
+      wrapper.style.minHeight = `${pixelH}px`;
+      wrapper.style.aspectRatio = `${width} / ${height}`;
+      wrapper.style.backgroundColor = state.paperBg;
+
+      const bgRect = document.getElementById('svgBackgroundRect');
+      if (bgRect) bgRect.setAttribute('fill', state.paperBg);
+
+      // 背景圖片與遮罩處理
+      const svgImg = document.getElementById('svgBgImage');
+      const svgMask = document.getElementById('svgColorMask');
+      if (state.bgImageData) {
+        svgImg.setAttribute('href', state.bgImageData);
+        svgImg.setAttribute('opacity', state.imgOpacity);
+        svgMask.setAttribute('fill', state.maskColor);
+        svgMask.setAttribute('opacity', state.maskOpacity);
+      } else {
+        svgImg.setAttribute('opacity', '0');
+        svgMask.setAttribute('opacity', '0');
+      }
+
+      // 清空舊向量內容
+      const root = document.getElementById('svgContentRoot');
+      root.innerHTML = '';
+
+      // 計算安全可繪製區域
+      const leftMargin = state.margin + state.gutter;
+      const rightMargin = width - state.margin;
+      let topMargin = state.margin;
+      let bottomMargin = height - state.margin;
+
+      // 繪製打孔與裝訂輔助線
+      renderPunchAndGutter(root, width, height, leftMargin);
+
+      // 繪製頁首 (Header)
+      if (state.enableHeader) {
+        const headerH = 14;
+        renderHeader(root, leftMargin, topMargin, rightMargin - leftMargin, headerH);
+        topMargin += headerH + 3;
+      }
+
+      // 繪製頁尾頁碼 (Footer)
+      if (state.footerPageNum !== 'none') {
+        const footerH = 8;
+        renderFooter(root, leftMargin, bottomMargin - footerH, rightMargin - leftMargin, footerH, 1);
+        bottomMargin -= footerH + 2;
+      }
+
+      const contentW = rightMargin - leftMargin;
+      const contentH = bottomMargin - topMargin;
+
+      if (contentW <= 5 || contentH <= 5) return;
+
+      // 依據格局分發渲染
+      renderPattern(root, leftMargin, topMargin, contentW, contentH);
+    }
+
+    function renderPunchAndGutter(root, w, h, leftMargin) {
+      if (state.gutter > 0) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', leftMargin);
+        line.setAttribute('y1', 0);
+        line.setAttribute('x2', leftMargin);
+        line.setAttribute('y2', h);
+        line.setAttribute('stroke', state.lineColor);
+        line.setAttribute('stroke-width', '0.15');
+        line.setAttribute('stroke-dasharray', '2, 2');
+        line.setAttribute('opacity', '0.4');
+        root.appendChild(line);
+      }
+
+      if (state.punchHoles === '2-hole') {
+        const cx = 8;
+        const cy1 = h / 2 - 40;
+        const cy2 = h / 2 + 40;
+        [cy1, cy2].forEach(cy => {
+          const cross = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          cross.setAttribute('d', `M ${cx-2} ${cy} L ${cx+2} ${cy} M ${cx} ${cy-2} L ${cx} ${cy+2}`);
+          cross.setAttribute('stroke', state.lineColor);
+          cross.setAttribute('stroke-width', '0.3');
+          cross.setAttribute('opacity', '0.6');
+          root.appendChild(cross);
+        });
+      } else if (state.punchHoles === '6-hole') {
+        const cx = 7;
+        const groupSpacing = 19;
+        const centerGap = 38;
+        const midY = h / 2;
+        const topY = midY - centerGap / 2 - groupSpacing;
+        const botY = midY + centerGap / 2;
+        const ys = [
+          topY, topY + groupSpacing, topY + groupSpacing * 2,
+          botY, botY + groupSpacing, botY + groupSpacing * 2
+        ];
+        ys.forEach(cy => {
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', cx);
+          circle.setAttribute('cy', cy);
+          circle.setAttribute('r', '1.8');
+          circle.setAttribute('fill', 'none');
+          circle.setAttribute('stroke', state.lineColor);
+          circle.setAttribute('stroke-width', '0.2');
+          circle.setAttribute('stroke-dasharray', '1, 1');
+          circle.setAttribute('opacity', '0.5');
+          root.appendChild(circle);
+        });
+      }
+    }
+
+    function renderHeader(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('opacity', state.lineOpacity);
+
+      // 主題/標題文字 (未加粗，精緻細字)
+      if (state.headerTitle.trim() !== '') {
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        title.setAttribute('x', x);
+        title.setAttribute('y', y + 7);
+        title.setAttribute('font-size', '4.2');
+        title.setAttribute('fill', state.lineColor);
+        title.setAttribute('letter-spacing', '0.8');
+        title.textContent = state.headerTitle.toUpperCase();
+        g.appendChild(title);
+      }
+
+      // 右側：日期與天氣心情
+      let rightOffset = x + w;
+      if (state.headerWeather) {
+        const weatherGroup = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        weatherGroup.setAttribute('x', rightOffset);
+        weatherGroup.setAttribute('y', y + 7);
+        weatherGroup.setAttribute('text-anchor', 'end');
+        weatherGroup.setAttribute('font-size', '3.5');
+        weatherGroup.setAttribute('fill', state.lineColor);
+        weatherGroup.textContent = '☀  ☁  ☂  ⚡  ❄';
+        g.appendChild(weatherGroup);
+        rightOffset -= 32;
+      }
+
+      if (state.headerDate) {
+        const dateText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dateText.setAttribute('x', rightOffset);
+        dateText.setAttribute('y', y + 7);
+        dateText.setAttribute('text-anchor', 'end');
+        dateText.setAttribute('font-size', '3');
+        dateText.setAttribute('font-family', 'monospace');
+        dateText.setAttribute('fill', state.lineColor);
+        dateText.textContent = 'DATE: ______ / ____ / ____';
+        g.appendChild(dateText);
+      }
+
+      // 頁首底部分隔線
+      const sep = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      sep.setAttribute('x1', x);
+      sep.setAttribute('y1', y + h);
+      sep.setAttribute('x2', x + w);
+      sep.setAttribute('y2', y + h);
+      sep.setAttribute('stroke', state.lineColor);
+      sep.setAttribute('stroke-width', (state.lineWidth * 1.5).toString());
+      g.appendChild(sep);
+
+      root.appendChild(g);
+    }
+
+    function renderFooter(root, x, y, w, h, pageNum) {
+      if (state.footerPageNum === 'none') return;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('opacity', state.lineOpacity * 0.9);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('font-size', '3');
+      text.setAttribute('fill', state.lineColor);
+      text.setAttribute('font-family', 'Inter, "Noto Sans TC", sans-serif');
+
+      const isBlank = state.pageNumType === 'blank';
+      let displayText = '';
+      const fmt = state.pageNumFormat || 'page-en';
+
+      if (fmt === 'page-en') {
+        displayText = isBlank ? 'PAGE: ________' : `PAGE: ${pageNum}`;
+      } else if (fmt === 'page-zh') {
+        displayText = isBlank ? '頁：________' : `頁：${pageNum}`;
+      } else if (fmt === 'no') {
+        displayText = isBlank ? 'NO. ________' : `NO. ${pageNum}`;
+      } else {
+        // dash 樣式
+        displayText = isBlank ? '—        —' : `— ${pageNum} —`;
+      }
+
+      if (state.footerPageNum === 'bottom-center') {
+        text.setAttribute('x', x + w / 2);
+        text.setAttribute('y', y + 5);
+        text.setAttribute('text-anchor', 'middle');
+      } else if (state.footerPageNum === 'bottom-right') {
+        text.setAttribute('x', x + w);
+        text.setAttribute('y', y + 5);
+        text.setAttribute('text-anchor', 'end');
+      } else if (state.footerPageNum === 'top-right') {
+        text.setAttribute('x', x + w);
+        text.setAttribute('y', state.margin + 4);
+        text.setAttribute('text-anchor', 'end');
+      }
+      text.textContent = displayText;
+      g.appendChild(text);
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       各格局渲染分派
+       ========================================================================== */
+    function renderPattern(root, x, y, w, h) {
+      switch (state.patternType) {
+        case 'dot': renderDotGrid(root, x, y, w, h); break;
+        case 'grid': renderGrid(root, x, y, w, h); break;
+        case 'ruled': renderRuled(root, x, y, w, h); break;
+        case 'music': renderMusicStaff(root, x, y, w, h); break;
+        case 'manuscript': renderManuscript(root, x, y, w, h); break;
+        case 'journal': renderDailyJournal(root, x, y, w, h); break;
+        case 'recipe': renderRecipeSheet(root, x, y, w, h); break;
+        case 'book': renderBookNotes(root, x, y, w, h); break;
+        case 'movie': renderMovieReview(root, x, y, w, h); break;
+        case 'travel': renderTravelJournal(root, x, y, w, h); break;
+        case 'monthly': renderMonthlyPlanner(root, x, y, w, h); break;
+        case 'weekly': renderWeeklyPlanner(root, x, y, w, h); break;
+        case 'vertical-ruled': renderVerticalRuled(root, x, y, w, h); break;
+        case 'cornell': renderCornell(root, x, y, w, h); break;
+        case 'hexagon': renderHexagon(root, x, y, w, h); break;
+      }
+    }
+
+    function renderDotGrid(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('fill', state.lineColor);
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const sp = Math.max(1, state.dotSpacing);
+      const cols = Math.floor(w / sp);
+      const rows = Math.floor(h / sp);
+      const startX = x + (w - cols * sp) / 2;
+      const startY = y + (h - rows * sp) / 2;
+      const r = Math.max(0.15, state.lineWidth * 1.1);
+
+      for (let i = 0; i <= cols; i++) {
+        for (let j = 0; j <= rows; j++) {
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', startX + i * sp);
+          circle.setAttribute('cy', startY + j * sp);
+          circle.setAttribute('r', r);
+          g.appendChild(circle);
+        }
+      }
+      root.appendChild(g);
+    }
+
+    function renderGrid(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const sp = Math.max(1, state.gridSize);
+      const cols = Math.floor(w / sp);
+      const rows = Math.floor(h / sp);
+      const startX = x + (w - cols * sp) / 2;
+      const startY = y + (h - rows * sp) / 2;
+
+      const hasMajor = state.gridMajor && state.gridMajor.enabled;
+      const subdiv = hasMajor ? Math.max(2, state.gridMajor.subdiv || 5) : 1;
+
+      let dMinor = '';
+      let dMajor = '';
+
+      for (let i = 0; i <= cols; i++) {
+        const curX = startX + i * sp;
+        const lineSeg = `M ${curX} ${startY} L ${curX} ${startY + rows * sp} `;
+        if (hasMajor && (i % subdiv === 0)) {
+          dMajor += lineSeg;
+        } else {
+          dMinor += lineSeg;
+        }
+      }
+
+      for (let j = 0; j <= rows; j++) {
+        const curY = startY + j * sp;
+        const lineSeg = `M ${startX} ${curY} L ${startX + cols * sp} ${curY} `;
+        if (hasMajor && (j % subdiv === 0)) {
+          dMajor += lineSeg;
+        } else {
+          dMinor += lineSeg;
+        }
+      }
+
+      if (dMinor) {
+        const pathMinor = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathMinor.setAttribute('d', dMinor);
+        pathMinor.setAttribute('stroke-width', (hasMajor ? state.lineWidth * 0.75 : state.lineWidth).toString());
+        pathMinor.setAttribute('opacity', (hasMajor ? state.lineOpacity * 0.75 : state.lineOpacity).toString());
+        g.appendChild(pathMinor);
+      }
+
+      if (dMajor) {
+        const pathMajor = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathMajor.setAttribute('d', dMajor);
+        pathMajor.setAttribute('stroke-width', (state.lineWidth * 1.8).toString());
+        pathMajor.setAttribute('opacity', state.lineOpacity.toString());
+        g.appendChild(pathMajor);
+      }
+
+      root.appendChild(g);
+    }
+
+    function renderRuled(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const rsub = state.ruledSub;
+      const sp = Math.max(1, state.ruledSpacing);
+
+      // 特殊：微粗橫線包細橫線組
+      if (rsub && rsub.enabled) {
+        const subCount = Math.max(2, Math.min(4, rsub.count || 3));
+        const isSeparate = rsub.separate !== false;
+        const gap = isSeparate ? Math.max(2, rsub.groupGap || 5) : 0;
+        const groupH = (subCount + 1) * sp;
+
+        let curY = y;
+        while (curY + groupH <= y + h) {
+          // 頂部微粗邊線 (確保清晰)
+          const topL = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          topL.setAttribute('x1', x);
+          topL.setAttribute('y1', curY);
+          topL.setAttribute('x2', x + w);
+          topL.setAttribute('y2', curY);
+          topL.setAttribute('stroke-width', (Math.max(0.24, state.lineWidth * 1.6)).toString());
+          g.appendChild(topL);
+
+          // 中間 2~4 條細橫線 (設定安全最小寬度 0.15mm，且不重複疊加半透明度，避免光柵化時消失)
+          for (let s = 1; s <= subCount; s++) {
+            const sy = curY + s * sp;
+            const subL = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            subL.setAttribute('x1', x);
+            subL.setAttribute('y1', sy);
+            subL.setAttribute('x2', x + w);
+            subL.setAttribute('y2', sy);
+            subL.setAttribute('stroke-width', (Math.max(0.15, state.lineWidth * 0.8)).toString());
+            if (state.ruledStyle === 'dashed') subL.setAttribute('stroke-dasharray', '2, 2');
+            if (state.ruledStyle === 'dotted') subL.setAttribute('stroke-dasharray', '0.6, 1.4');
+            g.appendChild(subL);
+          }
+
+          // 底部微粗邊線
+          const botL = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          botL.setAttribute('x1', x);
+          botL.setAttribute('y1', curY + groupH);
+          botL.setAttribute('x2', x + w);
+          botL.setAttribute('y2', curY + groupH);
+          botL.setAttribute('stroke-width', (Math.max(0.24, state.lineWidth * 1.6)).toString());
+          g.appendChild(botL);
+
+          curY += groupH + (isSeparate ? gap : 0);
+        }
+
+        root.appendChild(g);
+        return;
+      }
+
+      // 標準橫線
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      if (state.ruledStyle === 'dashed') g.setAttribute('stroke-dasharray', '2, 2');
+      if (state.ruledStyle === 'dotted') g.setAttribute('stroke-dasharray', '0.6, 1.4');
+
+      const count = Math.floor(h / sp);
+
+      if (state.ruledStyle === 'english-four') {
+        const unitH = sp * 3;
+        const groups = Math.floor(h / (unitH + 4));
+        for (let gIdx = 0; gIdx < groups; gIdx++) {
+          const baseGY = y + gIdx * (unitH + 4);
+          for (let l = 0; l < 4; l++) {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x);
+            line.setAttribute('y1', baseGY + l * sp);
+            line.setAttribute('x2', x + w);
+            line.setAttribute('y2', baseGY + l * sp);
+            if (l === 1 || l === 2) {
+              line.setAttribute('stroke', state.lineColor);
+              line.setAttribute('stroke-dasharray', '1.5, 1.5');
+            } else {
+              line.setAttribute('stroke', state.lineColor);
+            }
+            g.appendChild(line);
+          }
+        }
+      } else {
+        for (let i = 1; i <= count; i++) {
+          const curY = y + i * sp;
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', curY);
+          line.setAttribute('x2', x + w);
+          line.setAttribute('y2', curY);
+          g.appendChild(line);
+        }
+      }
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       音樂五線譜渲染核心 (Music Staff)
+       ========================================================================== */
+    function renderMusicStaff(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const cfg = state.music || { lineSpacing: 1.8, systemGap: 12 };
+      const sp = Math.max(1.0, cfg.lineSpacing || 1.8);
+      const gap = Math.max(4.0, cfg.systemGap || 12);
+      const staffH = 4 * sp; // 5 條線共有 4 個間距
+
+      const totalUnitH = staffH + gap;
+      const count = Math.floor((h + gap) / totalUnitH);
+      if (count <= 0) return;
+
+      const totalStavesH = count * staffH + (count - 1) * gap;
+      const startY = y + Math.max(0, (h - totalStavesH) / 2);
+
+      for (let s = 0; s < count; s++) {
+        const topY = startY + s * (staffH + gap);
+        const botY = topY + staffH;
+
+        // 繪製五條橫線
+        for (let l = 0; l < 5; l++) {
+          const ly = topY + l * sp;
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', ly);
+          line.setAttribute('x2', x + w);
+          line.setAttribute('y2', ly);
+          line.setAttribute('stroke-width', state.lineWidth.toString());
+          g.appendChild(line);
+        }
+
+        // 左右兩端小節封閉線 (Vertical Barlines)
+        const leftBar = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        leftBar.setAttribute('x1', x);
+        leftBar.setAttribute('y1', topY);
+        leftBar.setAttribute('x2', x);
+        leftBar.setAttribute('y2', botY);
+        leftBar.setAttribute('stroke-width', (state.lineWidth * 1.5).toString());
+        g.appendChild(leftBar);
+
+        const rightBar = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        rightBar.setAttribute('x1', x + w);
+        rightBar.setAttribute('y1', topY);
+        rightBar.setAttribute('x2', x + w);
+        rightBar.setAttribute('y2', botY);
+        rightBar.setAttribute('stroke-width', (state.lineWidth * 1.5).toString());
+        g.appendChild(rightBar);
+      }
+
+      root.appendChild(g);
+    }
+
+    function renderManuscript(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const ms = state.manuscript || { charsPerLine: 20, boxSize: 8, lineGap: 3.5 };
+      const charsPerLine = Math.max(5, ms.charsPerLine || 20);
+      const boxSize = Math.max(3, ms.boxSize || 8);
+      const lineGap = Math.max(1, ms.lineGap || 3.5);
+
+      const colUnitW = boxSize + lineGap;
+      const totalCols = Math.floor((w + lineGap) / colUnitW);
+      if (totalCols <= 0) return;
+
+      const totalH = charsPerLine * boxSize;
+      const startY = y + Math.max(0, (h - totalH) / 2);
+      // 原稿紙傳統由右向左直行排列
+      const startX = x + w - boxSize;
+
+      for (let c = 0; c < totalCols; c++) {
+        const colX = startX - c * colUnitW;
+        if (colX < x) break;
+
+        for (let r = 0; r < charsPerLine; r++) {
+          const curY = startY + r * boxSize;
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', colX);
+          rect.setAttribute('y', curY);
+          rect.setAttribute('width', boxSize);
+          rect.setAttribute('height', boxSize);
+          rect.setAttribute('fill', 'none');
+          g.appendChild(rect);
+        }
+      }
+      root.appendChild(g);
+    }
+
+    function renderDailyJournal(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const lang = state.journalLang || 'zh';
+      const isEn = lang === 'en';
+      const isBi = lang === 'bilingual';
+
+      const t = {
+        priorities: isEn ? '★ PRIORITIES' : (isBi ? '★ 今日要事 / Priorities' : '★ 今日核心要事'),
+        checklist: isEn ? '☑ TO-DO LIST' : (isBi ? '☑ 待辦清單 / Checklist' : '☑ 待辦清單'),
+        expenses: isEn ? 'EXPENSES' : (isBi ? '收支記帳 / Expenses' : '收支記帳'),
+        gratitude: isEn ? '❤ GRATITUDE' : (isBi ? '今日感恩 / Gratitude' : '今日感恩與小確幸'),
+        photo: isEn ? 'PHOTO / MEMORY' : (isBi ? '相片 / Photo' : '相片 / 拍立得'),
+        notes: isEn ? '✍ JOURNAL & REFLECTIONS' : (isBi ? '手帳日記 / Journal' : '自由日記與感悟'),
+        water: isEn ? 'WATER' : '飲水',
+        mood: isEn ? 'MOOD' : '心情'
+      };
+
+      const mods = state.journalModules || {};
+      const rows = state.journalRows || { priorities: 3, checklist: 5, expenses: 4, gratitude: 3, photoHeight: 35 };
+
+      const colW = (w - 6) / 2;
+      const leftX = x;
+      const rightX = x + colW + 6;
+      let leftY = y;
+      let rightY = y;
+
+      // 左側模組：核心重點、待辦清單、今日感恩
+      if (mods.priorities !== false) {
+        leftY = renderJournalSection(g, leftX, leftY, colW, t.priorities, rows.priorities || 3, 'num');
+      }
+
+      if (mods.checklist !== false) {
+        leftY = renderJournalSection(g, leftX, leftY, colW, t.checklist, rows.checklist || 5, 'box');
+      }
+
+      if (mods.gratitude !== false) {
+        leftY = renderJournalSection(g, leftX, leftY, colW, t.gratitude, rows.gratitude || 3, 'heart');
+      }
+
+      // 右側模組：相片框、飲水/心情、收支記帳
+      if (mods.photo) {
+        const phH = rows.photoHeight || 35;
+        renderPhotoFrame(g, rightX, rightY, colW, phH, t.photo);
+        rightY += phH + 5;
+      }
+
+      if (mods.mood || mods.water) {
+        const mwBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        mwBox.setAttribute('x', rightX);
+        mwBox.setAttribute('y', rightY);
+        mwBox.setAttribute('width', colW);
+        mwBox.setAttribute('height', '12');
+        mwBox.setAttribute('fill', 'none');
+        mwBox.setAttribute('rx', '1');
+        g.appendChild(mwBox);
+
+        if (mods.mood) {
+          const moodTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          moodTxt.setAttribute('x', rightX + 3);
+          moodTxt.setAttribute('y', rightY + 7.5);
+          moodTxt.setAttribute('font-size', '2.6');
+          moodTxt.setAttribute('fill', state.lineColor);
+          moodTxt.textContent = `${t.mood}: ☺  😐  ☹  ⚡`;
+          g.appendChild(moodTxt);
+        }
+
+        if (mods.water) {
+          const waterTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          waterTxt.setAttribute('x', rightX + colW - 3);
+          waterTxt.setAttribute('y', rightY + 7.5);
+          waterTxt.setAttribute('text-anchor', 'end');
+          waterTxt.setAttribute('font-size', '2.5');
+          waterTxt.setAttribute('fill', state.lineColor);
+          waterTxt.textContent = `💧💧💧💧💧`;
+          g.appendChild(waterTxt);
+        }
+
+        rightY += 16;
+      }
+
+      if (mods.expenses !== false) {
+        rightY = renderExpenseSection(g, rightX, rightY, colW, t.expenses, '項目', '金額', rows.expenses || 4);
+      }
+
+      const startBodyY = Math.max(leftY, rightY) + 2;
+      const bodyH = y + h - startBodyY;
+
+      if (bodyH > 18) {
+        const bTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        bTitle.setAttribute('x', x);
+        bTitle.setAttribute('y', startBodyY + 4);
+        bTitle.setAttribute('font-size', '3.2');
+        bTitle.setAttribute('fill', state.lineColor);
+        bTitle.textContent = t.notes;
+        g.appendChild(bTitle);
+
+        const bodyLinesStartY = startBodyY + 6;
+        const lineCount = Math.floor((bodyH - 6) / 6.5);
+        for (let l = 1; l <= lineCount; l++) {
+          const ly = bodyLinesStartY + l * 6.5;
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', ly);
+          line.setAttribute('x2', x + w);
+          line.setAttribute('y2', ly);
+          g.appendChild(line);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    function renderRecipeSheet(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const cfg = state.recipe || {
+        hasPhoto: true,
+        photoHeight: 45,
+        lang: 'zh',
+        ingredientsRows: 8,
+        stepCols: 6,
+        detailRows: 6
+      };
+      const hasPhoto = cfg.hasPhoto !== false;
+      const photoH = hasPhoto ? (cfg.photoHeight || 45) : 0;
+      const lang = cfg.lang || 'zh';
+      const isEn = lang === 'en';
+      const isBi = lang === 'bilingual';
+
+      // 多語言字典（無多餘底線）
+      const t = {
+        photoWatermark: isEn ? 'PHOTO / FINISHED DISH' : (isBi ? '成 品 照 片 / PHOTO' : '成 品 照 片'),
+        recipeName1: isEn ? 'RECIPE NAME' : (isBi ? '食譜名稱 / Recipe' : '食譜名稱'),
+        recipeName2: isEn ? 'CATEGORY / SUBTITLE' : (isBi ? '英文/副標題 / Subtitle' : '英文 / 副標題'),
+        yield: isEn ? 'Yield' : (isBi ? '成品數量 (Yield)' : '成品數量'),
+        mold: isEn ? 'Pan / Mold' : (isBi ? '容器規格 (Mold)' : '容器規格'),
+        temp: isEn ? 'Temp & Time' : (isBi ? '預熱烘焙 (Temp / Time)' : '預熱與烘焙'),
+        ingHeader: isEn ? 'Ingredients' : (isBi ? '材料 (Ingredients)' : '材料'),
+        unitHeader: isEn ? 'Unit' : (isBi ? '單位 (Unit)' : '單位'),
+        qtyHeader: isEn ? 'Qty' : (isBi ? '基準 (Qty)' : '數量'),
+        scaleHeader: isEn ? 'Scale (X)' : (isBi ? '倍數 (X)' : '倍數'),
+        methodHeader: isEn ? 'METHOD / STEPS' : (isBi ? '作法步驟 (METHOD / STEPS)' : '作 法 步 驟'),
+        detailHeader: isEn ? 'DETAILED DIRECTIONS & NOTES' : (isBi ? '詳細步驟與製作要點 / DETAILED DIRECTIONS' : '詳 細 作 法 步 驟 與 製 作 備 忘')
+      };
+
+      const stepNamesZh = ['一', '二', '三', '四', '五', '六', '七', '八'];
+      let curY = y;
+
+      if (hasPhoto && photoH > 0) {
+        const photoRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        photoRect.setAttribute('x', x);
+        photoRect.setAttribute('y', curY);
+        photoRect.setAttribute('width', w);
+        photoRect.setAttribute('height', photoH);
+        photoRect.setAttribute('fill', 'none');
+        photoRect.setAttribute('stroke-width', (state.lineWidth * 1.4).toString());
+        g.appendChild(photoRect);
+
+        const photoText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        photoText.setAttribute('x', x + w / 2);
+        photoText.setAttribute('y', curY + photoH / 2 + 3.5);
+        photoText.setAttribute('text-anchor', 'middle');
+        photoText.setAttribute('font-size', isEn ? '8' : '11');
+        photoText.setAttribute('fill', state.lineColor);
+        photoText.setAttribute('letter-spacing', isEn ? '3' : '6');
+        photoText.setAttribute('opacity', '0.4');
+        photoText.textContent = t.photoWatermark;
+        g.appendChild(photoText);
+
+        const cSize = 5;
+        [
+          `M ${x} ${curY+cSize} L ${x} ${curY} L ${x+cSize} ${curY}`,
+          `M ${x+w-cSize} ${curY} L ${x+w} ${curY} L ${x+w} ${curY+cSize}`,
+          `M ${x} ${curY+photoH-cSize} L ${x} ${curY+photoH} L ${x+cSize} ${curY+photoH}`,
+          `M ${x+w-cSize} ${curY+photoH} L ${x+w} ${curY+photoH} L ${x+w} ${curY+photoH-cSize}`
+        ].forEach(d => {
+          const cp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          cp.setAttribute('d', d);
+          cp.setAttribute('stroke', state.lineColor);
+          cp.setAttribute('stroke-width', '0.7');
+          cp.setAttribute('fill', 'none');
+          g.appendChild(cp);
+        });
+
+        curY += photoH;
+      }
+
+      const infoH = 18;
+      const leftColW = w * 0.44;
+
+      const infoRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      infoRect.setAttribute('x', x);
+      infoRect.setAttribute('y', curY);
+      infoRect.setAttribute('width', w);
+      infoRect.setAttribute('height', infoH);
+      infoRect.setAttribute('fill', 'none');
+      g.appendChild(infoRect);
+
+      const divV = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      divV.setAttribute('x1', x + leftColW);
+      divV.setAttribute('y1', curY);
+      divV.setAttribute('x2', x + leftColW);
+      divV.setAttribute('y2', curY + infoH);
+      g.appendChild(divV);
+
+      const nameMidY = curY + infoH / 2;
+      const nameMidLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      nameMidLine.setAttribute('x1', x);
+      nameMidLine.setAttribute('y1', nameMidY);
+      nameMidLine.setAttribute('x2', x + leftColW);
+      nameMidLine.setAttribute('y2', nameMidY);
+      nameMidLine.setAttribute('stroke-dasharray', '1, 1');
+      g.appendChild(nameMidLine);
+
+      const nameLabel1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      nameLabel1.setAttribute('x', x + 3.5);
+      nameLabel1.setAttribute('y', curY + 6);
+      nameLabel1.setAttribute('text-anchor', 'start');
+      nameLabel1.setAttribute('font-size', '3.0');
+      nameLabel1.setAttribute('fill', state.lineColor);
+      nameLabel1.textContent = t.recipeName1;
+      g.appendChild(nameLabel1);
+
+      const nameLabel2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      nameLabel2.setAttribute('x', x + 3.5);
+      nameLabel2.setAttribute('y', nameMidY + 6);
+      nameLabel2.setAttribute('text-anchor', 'start');
+      nameLabel2.setAttribute('font-size', '2.6');
+      nameLabel2.setAttribute('fill', state.lineColor);
+      nameLabel2.textContent = t.recipeName2;
+      g.appendChild(nameLabel2);
+
+      const paramRowH = infoH / 3;
+      for (let r = 1; r < 3; r++) {
+        const prLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        prLine.setAttribute('x1', x + leftColW);
+        prLine.setAttribute('y1', curY + r * paramRowH);
+        prLine.setAttribute('x2', x + w);
+        prLine.setAttribute('y2', curY + r * paramRowH);
+        g.appendChild(prLine);
+      }
+
+      const paramTexts = [t.yield, t.mold, t.temp];
+      paramTexts.forEach((pt, idx) => {
+        const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        txt.setAttribute('x', x + leftColW + 3);
+        txt.setAttribute('y', curY + idx * paramRowH + 4.2);
+        txt.setAttribute('font-size', '2.6');
+        txt.setAttribute('fill', state.lineColor);
+        txt.textContent = pt;
+        g.appendChild(txt);
+      });
+
+      curY += infoH;
+
+      const remainingAvailH = y + h - curY;
+      const detailRowCount = (cfg.detailRows !== undefined) ? cfg.detailRows : 6;
+      
+      let detailH = 0;
+      if (detailRowCount > 0) {
+        const maxDetailH = remainingAvailH * 0.7;
+        const targetDetailH = 8 + detailRowCount * 5.8;
+        detailH = Math.min(maxDetailH, targetDetailH);
+      }
+
+      const tableH = remainingAvailH - detailH;
+      const rows = Math.max(3, cfg.ingredientsRows || 8);
+      const rowH = tableH / (rows + 1);
+
+      const ingColW = leftColW;
+      const c1 = ingColW * 0.40;
+      const c2 = ingColW * 0.20;
+      const c3 = ingColW * 0.20;
+      const c4 = ingColW * 0.20;
+
+      const bottomTableRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bottomTableRect.setAttribute('x', x);
+      bottomTableRect.setAttribute('y', curY);
+      bottomTableRect.setAttribute('width', w);
+      bottomTableRect.setAttribute('height', tableH);
+      bottomTableRect.setAttribute('fill', 'none');
+      g.appendChild(bottomTableRect);
+
+      for (let r = 1; r <= rows; r++) {
+        const hl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hl.setAttribute('x1', x);
+        hl.setAttribute('y1', curY + r * rowH);
+        hl.setAttribute('x2', x + w);
+        hl.setAttribute('y2', curY + r * rowH);
+        g.appendChild(hl);
+      }
+
+      [c1, c1 + c2, c1 + c2 + c3, ingColW].forEach(cx => {
+        const vl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        vl.setAttribute('x1', x + cx);
+        vl.setAttribute('y1', curY);
+        vl.setAttribute('x2', x + cx);
+        vl.setAttribute('y2', curY + tableH);
+        g.appendChild(vl);
+      });
+
+      const ingHeaders = [
+        { t: t.ingHeader, x: x + c1 / 2 },
+        { t: t.unitHeader, x: x + c1 + c2 / 2 },
+        { t: t.qtyHeader, x: x + c1 + c2 + c3 / 2 },
+        { t: t.scaleHeader, x: x + c1 + c2 + c3 + c4 / 2 }
+      ];
+      ingHeaders.forEach(ih => {
+        const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        txt.setAttribute('x', ih.x);
+        txt.setAttribute('y', curY + rowH / 2 + 1.1);
+        txt.setAttribute('text-anchor', 'middle');
+        txt.setAttribute('font-size', '2.6');
+        txt.setAttribute('fill', state.lineColor);
+        txt.textContent = ih.t;
+        g.appendChild(txt);
+      });
+
+      const stepTotalW = w - ingColW;
+      const stepCols = Math.max(3, Math.min(8, cfg.stepCols || 6));
+      const stepColW = stepTotalW / stepCols;
+
+      const stepHeaderTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      stepHeaderTxt.setAttribute('x', x + ingColW + stepTotalW / 2);
+      stepHeaderTxt.setAttribute('y', curY + rowH * 0.44);
+      stepHeaderTxt.setAttribute('text-anchor', 'middle');
+      stepHeaderTxt.setAttribute('font-size', '2.6');
+      stepHeaderTxt.setAttribute('fill', state.lineColor);
+      stepHeaderTxt.textContent = t.methodHeader;
+      g.appendChild(stepHeaderTxt);
+
+      const subLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      subLine.setAttribute('x1', x + ingColW);
+      subLine.setAttribute('y1', curY + rowH * 0.6);
+      subLine.setAttribute('x2', x + w);
+      subLine.setAttribute('y2', curY + rowH * 0.6);
+      g.appendChild(subLine);
+
+      for (let s = 0; s < stepCols; s++) {
+        const scx = x + ingColW + s * stepColW;
+        if (s > 0) {
+          const svl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          svl.setAttribute('x1', scx);
+          svl.setAttribute('y1', curY + rowH * 0.6);
+          svl.setAttribute('x2', scx);
+          svl.setAttribute('y2', curY + tableH);
+          g.appendChild(svl);
+        }
+
+        const sn = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        sn.setAttribute('x', scx + stepColW / 2);
+        sn.setAttribute('y', curY + rowH * 0.88);
+        sn.setAttribute('text-anchor', 'middle');
+        sn.setAttribute('font-size', '2.5');
+        sn.setAttribute('fill', state.lineColor);
+        sn.textContent = isEn ? (s + 1).toString() : (stepNamesZh[s] || (s + 1).toString());
+        g.appendChild(sn);
+      }
+
+      curY += tableH;
+
+      if (detailRowCount > 0 && detailH > 10) {
+        const dBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        dBox.setAttribute('x', x);
+        dBox.setAttribute('y', curY);
+        dBox.setAttribute('width', w);
+        dBox.setAttribute('height', detailH);
+        dBox.setAttribute('fill', 'none');
+        g.appendChild(dBox);
+
+        const dTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dTitle.setAttribute('x', x + 3.5);
+        dTitle.setAttribute('y', curY + 5.2);
+        dTitle.setAttribute('font-size', '2.8');
+        dTitle.setAttribute('fill', state.lineColor);
+        dTitle.textContent = `📝 ${t.detailHeader}`;
+        g.appendChild(dTitle);
+
+        const dLineHeaderY = curY + 7.2;
+        const availRowH = (curY + detailH - dLineHeaderY) / detailRowCount;
+
+        for (let dr = 1; dr <= detailRowCount; dr++) {
+          const lY = dLineHeaderY + dr * availRowH;
+
+          const stepNumTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          stepNumTxt.setAttribute('x', x + 4);
+          stepNumTxt.setAttribute('y', lY - 1.2);
+          stepNumTxt.setAttribute('font-size', '2.4');
+          stepNumTxt.setAttribute('font-family', 'monospace');
+          stepNumTxt.setAttribute('fill', state.lineColor);
+          stepNumTxt.textContent = `${dr}.`;
+          g.appendChild(stepNumTxt);
+
+          const dLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          dLine.setAttribute('x1', x + 9);
+          dLine.setAttribute('y1', lY);
+          dLine.setAttribute('x2', x + w - 3);
+          dLine.setAttribute('y2', lY);
+          dLine.setAttribute('stroke-dasharray', '1.5, 1.5');
+          g.appendChild(dLine);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       讀書筆記 (Book Review / Notes)
+       ========================================================================== */
+    function renderBookNotes(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      let curY = y;
+      const cfg = state.book || { hasQuotes: true, hasAction: true, noteStyle: 'ruled' };
+
+      // 1. 書籍基本資訊卡
+      const infoH = 24;
+      const infoBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      infoBox.setAttribute('x', x);
+      infoBox.setAttribute('y', curY);
+      infoBox.setAttribute('width', w);
+      infoBox.setAttribute('height', infoH);
+      infoBox.setAttribute('fill', 'none');
+      infoBox.setAttribute('rx', '1');
+      g.appendChild(infoBox);
+
+      // 封面/書本迷你小框
+      const coverW = 18;
+      const coverH = infoH - 4;
+      const coverRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      coverRect.setAttribute('x', x + 2);
+      coverRect.setAttribute('y', curY + 2);
+      coverRect.setAttribute('width', coverW);
+      coverRect.setAttribute('height', coverH);
+      coverRect.setAttribute('fill', 'none');
+      coverRect.setAttribute('stroke-dasharray', '1.5, 1.5');
+      g.appendChild(coverRect);
+
+      const coverText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      coverText.setAttribute('x', x + 2 + coverW / 2);
+      coverText.setAttribute('y', curY + 2 + coverH / 2 + 1);
+      coverText.setAttribute('text-anchor', 'middle');
+      coverText.setAttribute('font-size', '2.4');
+      coverText.setAttribute('fill', state.lineColor);
+      coverText.textContent = '📖 封面';
+      g.appendChild(coverText);
+
+      // 書名、作者、評分等資訊橫線
+      const infoX = x + coverW + 5;
+      const bookFields = [
+        '書名 (TITLE): ____________________________________',
+        '作者 (AUTHOR): _______________  出版日期: ________',
+        '類別 (GENRE): ______________  評分: ★ ★ ★ ★ ★'
+      ];
+      bookFields.forEach((bf, idx) => {
+        const ft = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        ft.setAttribute('x', infoX);
+        ft.setAttribute('y', curY + 6 + idx * 7);
+        ft.setAttribute('font-size', '3');
+        ft.setAttribute('fill', state.lineColor);
+        ft.textContent = bf;
+        g.appendChild(ft);
+      });
+
+      curY += infoH + 5;
+
+      // 2. 金句摘錄 (Golden Quotes) 依據自訂列數動態高度繪製
+      if (cfg.hasQuotes) {
+        const qRows = cfg.quotesRows || 3;
+        const quoteH = 8 + qRows * 5.8;
+        const qBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        qBox.setAttribute('x', x);
+        qBox.setAttribute('y', curY);
+        qBox.setAttribute('width', w);
+        qBox.setAttribute('height', quoteH);
+        qBox.setAttribute('fill', 'none');
+        g.appendChild(qBox);
+
+        const qTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        qTitle.setAttribute('x', x + 3);
+        qTitle.setAttribute('y', curY + 4.8);
+        qTitle.setAttribute('font-size', '3.0');
+        qTitle.setAttribute('fill', state.lineColor);
+        qTitle.textContent = '❝ 核心金句摘錄 (GOLDEN QUOTES)';
+        g.appendChild(qTitle);
+
+        for (let l = 1; l <= qRows; l++) {
+          const ql = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          ql.setAttribute('x1', x + 3);
+          ql.setAttribute('y1', curY + 6.2 + (l - 1) * 5.8 + 5.8);
+          ql.setAttribute('x2', x + w - 3);
+          ql.setAttribute('y2', curY + 6.2 + (l - 1) * 5.8 + 5.8);
+          ql.setAttribute('stroke-dasharray', '1.5, 1.5');
+          g.appendChild(ql);
+        }
+        curY += quoteH + 5;
+      }
+
+      // 3. 行動實踐清單 (Action Items) 依據自訂列數動態高度
+      let bottomActionH = 0;
+      const actRows = cfg.actionRows || 3;
+      if (cfg.hasAction) {
+        bottomActionH = 9 + actRows * 5.5;
+      }
+
+      // 中間主讀書心得與關鍵反思
+      const noteH = y + h - curY - bottomActionH - (bottomActionH > 0 ? 5 : 0);
+      if (noteH > 20) {
+        const nTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nTitle.setAttribute('x', x);
+        nTitle.setAttribute('y', curY + 4);
+        nTitle.setAttribute('font-size', '3.3');
+        nTitle.setAttribute('fill', state.lineColor);
+        nTitle.textContent = '💡 深度思維與閱讀心得 (KEY TAKEAWAYS & REFLECTION)';
+        g.appendChild(nTitle);
+
+        const bodyY = curY + 6;
+        const bodyH = noteH - 6;
+
+        if (cfg.noteStyle === 'dot') {
+          renderDotGrid(g, x, bodyY, w, bodyH);
+        } else if (cfg.noteStyle === 'blank') {
+          const br = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          br.setAttribute('x', x);
+          br.setAttribute('y', bodyY);
+          br.setAttribute('width', w);
+          br.setAttribute('height', bodyH);
+          br.setAttribute('fill', 'none');
+          g.appendChild(br);
+        } else {
+          const lSpacing = 7;
+          const count = Math.floor(bodyH / lSpacing);
+          for (let i = 1; i <= count; i++) {
+            const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            l.setAttribute('x1', x);
+            l.setAttribute('y1', bodyY + i * lSpacing);
+            l.setAttribute('x2', x + w);
+            l.setAttribute('y2', bodyY + i * lSpacing);
+            g.appendChild(l);
+          }
+        }
+        curY += noteH + 5;
+      }
+
+      // 底部實踐清單 (Action Plan) 依據自訂列數繪製
+      if (cfg.hasAction) {
+        const aBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        aBox.setAttribute('x', x);
+        aBox.setAttribute('y', curY);
+        aBox.setAttribute('width', w);
+        aBox.setAttribute('height', bottomActionH);
+        aBox.setAttribute('fill', 'none');
+        g.appendChild(aBox);
+
+        const aTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        aTitle.setAttribute('x', x + 3);
+        aTitle.setAttribute('y', curY + 5);
+        aTitle.setAttribute('font-size', '3.0');
+        aTitle.setAttribute('fill', state.lineColor);
+        aTitle.textContent = '🚀 知行合一：我的生活行動計畫 (ACTION PLAN)';
+        g.appendChild(aTitle);
+
+        for (let i = 0; i < actRows; i++) {
+          const lineY = curY + 10 + i * 5.5;
+          const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          box.setAttribute('x', x + 3);
+          box.setAttribute('y', lineY - 3.2);
+          box.setAttribute('width', '2.8');
+          box.setAttribute('height', '2.8');
+          box.setAttribute('fill', 'none');
+          box.setAttribute('stroke-width', '0.22');
+          g.appendChild(box);
+
+          const al = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          al.setAttribute('x1', x + 8);
+          al.setAttribute('y1', lineY);
+          al.setAttribute('x2', x + w - 3);
+          al.setAttribute('y2', lineY);
+          g.appendChild(al);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       電影心得 (Movie Review)
+       ========================================================================== */
+    function renderMovieReview(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const cfg = state.movie || { posterHeight: 55, hasQuotes: true, quotesRows: 2 };
+      const posterH = cfg.posterHeight || 55;
+      const posterW = posterH * 0.72; // 標準 3:4 電影海報比例
+      let curY = y;
+
+      // 1. 海報框 (左側) 與電影基本資訊 (右側)
+      const posterRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      posterRect.setAttribute('x', x);
+      posterRect.setAttribute('y', curY);
+      posterRect.setAttribute('width', posterW);
+      posterRect.setAttribute('height', posterH);
+      posterRect.setAttribute('fill', 'none');
+      posterRect.setAttribute('stroke-dasharray', '2, 2');
+      g.appendChild(posterRect);
+
+      const posterTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      posterTxt.setAttribute('x', x + posterW / 2);
+      posterTxt.setAttribute('y', curY + posterH / 2 + 1);
+      posterTxt.setAttribute('text-anchor', 'middle');
+      posterTxt.setAttribute('font-size', '3');
+      posterTxt.setAttribute('fill', state.lineColor);
+      posterTxt.textContent = '🎬 電影海報 / 票根';
+      g.appendChild(posterTxt);
+
+      // 右側資訊欄
+      const rightX = x + posterW + 5;
+      const rightW = w - posterW - 5;
+      const mFields = [
+        '片名 (TITLE): ____________________',
+        '導演 (DIRECTOR): ________________',
+        '主演 (STARRING): ________________',
+        '年份 (YEAR): ________  片長: ____ min',
+        '觀影日期: ______ / ____ / ____',
+        '觀影管道: 院線 / 串流 / 光碟',
+        '總體推薦度: ★ ★ ★ ★ ★'
+      ];
+      const stepY = (posterH - 4) / mFields.length;
+      mFields.forEach((mf, idx) => {
+        const mt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        mt.setAttribute('x', rightX);
+        mt.setAttribute('y', curY + 5 + idx * stepY);
+        mt.setAttribute('font-size', '3');
+        mt.setAttribute('fill', state.lineColor);
+        mt.textContent = mf;
+        g.appendChild(mt);
+      });
+
+      curY += posterH + 6;
+
+      // 2. 經典台詞 (Quotes) 依據自訂列數繪製
+      if (cfg.hasQuotes) {
+        const qRows = cfg.quotesRows || 2;
+        const qBoxH = 8 + qRows * 6.5;
+        const qBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        qBox.setAttribute('x', x);
+        qBox.setAttribute('y', curY);
+        qBox.setAttribute('width', w);
+        qBox.setAttribute('height', qBoxH);
+        qBox.setAttribute('fill', 'none');
+        g.appendChild(qBox);
+
+        const qt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        qt.setAttribute('x', x + 3);
+        qt.setAttribute('y', curY + 5);
+        qt.setAttribute('font-size', '3');
+        qt.setAttribute('fill', state.lineColor);
+        qt.textContent = '❝ 經典台詞 / 難忘瞬間 (MEMORABLE QUOTES)';
+        g.appendChild(qt);
+
+        for (let l = 1; l <= qRows; l++) {
+          const ql = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          ql.setAttribute('x1', x + 3);
+          ql.setAttribute('y1', curY + 6 + l * 6.5);
+          ql.setAttribute('x2', x + w - 3);
+          ql.setAttribute('y2', curY + 6 + l * 6.5);
+          ql.setAttribute('stroke-dasharray', '1.5, 1.5');
+          g.appendChild(ql);
+        }
+        curY += qBoxH + 5;
+      }
+
+      // 3. 影評正文區 (橫線書寫)
+      const reviewH = y + h - curY;
+      if (reviewH > 20) {
+        const rTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        rTitle.setAttribute('x', x);
+        rTitle.setAttribute('y', curY + 4);
+        rTitle.setAttribute('font-size', '3.3');
+        rTitle.setAttribute('fill', state.lineColor);
+        rTitle.textContent = '🖋 觀後感評與劇情解析 (REVIEW & THOUGHTS)';
+        g.appendChild(rTitle);
+
+        const bodyY = curY + 6;
+        const lSpacing = 7;
+        const count = Math.floor((reviewH - 6) / lSpacing);
+        for (let i = 1; i <= count; i++) {
+          const rl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          rl.setAttribute('x1', x);
+          rl.setAttribute('y1', bodyY + i * lSpacing);
+          rl.setAttribute('x2', x + w);
+          rl.setAttribute('y2', bodyY + i * lSpacing);
+          g.appendChild(rl);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       旅行日誌 (Travel Journal)
+       ========================================================================== */
+    function renderTravelJournal(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const cfg = state.travel || { hasSchedule: true, scheduleRows: 6, hasExpenses: true, expensesRows: 5, hasPhoto: true, photoHeight: 35 };
+      let curY = y;
+
+      // 1. 頂部目的地、天氣與旅伴
+      const topH = 14;
+      const topRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      topRect.setAttribute('x', x);
+      topRect.setAttribute('y', curY);
+      topRect.setAttribute('width', w);
+      topRect.setAttribute('height', topH);
+      topRect.setAttribute('fill', 'none');
+      g.appendChild(topRect);
+
+      const destTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      destTxt.setAttribute('x', x + 3);
+      destTxt.setAttribute('y', curY + 6);
+      destTxt.setAttribute('font-size', '3.5');
+      destTxt.setAttribute('fill', state.lineColor);
+      destTxt.textContent = '✈ 目的地 (DESTINATION): _______________________';
+      g.appendChild(destTxt);
+
+      const infoTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      infoTxt.setAttribute('x', x + 3);
+      infoTxt.setAttribute('y', curY + 11.5);
+      infoTxt.setAttribute('font-size', '2.8');
+      infoTxt.setAttribute('fill', state.lineColor);
+      infoTxt.textContent = '📅 日期: ______/____/____   🌤 天氣/溫度: _______   👥 旅伴: ____________';
+      g.appendChild(infoTxt);
+
+      curY += topH + 5;
+
+      // 2. 雙欄：左側行程時間軸 (Time Schedule) vs 右側 (照片/票根 + 記帳)
+      const colW = (w - 6) / 2;
+      const rightX = x + colW + 6;
+
+      const schedRows = cfg.scheduleRows || 6;
+      const schedBoxH = 8 + schedRows * 7;
+      
+      const photoH = (cfg.hasPhoto !== false) ? (cfg.photoHeight || 35) : 0;
+      const expRows = cfg.expensesRows || 5;
+      const expBoxH = (cfg.hasExpenses !== false) ? (8 + expRows * 6) : 0;
+      const rightTotalH = (photoH > 0 ? photoH + (expBoxH > 0 ? 5 : 0) : 0) + expBoxH;
+
+      const colH = Math.max(schedBoxH, rightTotalH, 40);
+
+      // 左欄：時間軸 (Schedule) 依據自訂列數繪製
+      if (cfg.hasSchedule !== false) {
+        const schedBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        schedBox.setAttribute('x', x);
+        schedBox.setAttribute('y', curY);
+        schedBox.setAttribute('width', colW);
+        schedBox.setAttribute('height', colH);
+        schedBox.setAttribute('fill', 'none');
+        g.appendChild(schedBox);
+
+        const schedTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        schedTitle.setAttribute('x', x + 3);
+        schedTitle.setAttribute('y', curY + 5);
+        schedTitle.setAttribute('font-size', '3');
+        schedTitle.setAttribute('fill', state.lineColor);
+        schedTitle.textContent = '⏰ 行程時刻表 (ITINERARY)';
+        g.appendChild(schedTitle);
+
+        const rowStep = (colH - 8) / schedRows;
+        for (let sl = 1; sl <= schedRows; sl++) {
+          const ly = curY + 6 + sl * rowStep;
+          const tCir = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          tCir.setAttribute('cx', x + 5);
+          tCir.setAttribute('cy', ly - 1);
+          tCir.setAttribute('r', '1.2');
+          tCir.setAttribute('fill', 'none');
+          g.appendChild(tCir);
+
+          const tl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          tl.setAttribute('x1', x + 9);
+          tl.setAttribute('y1', ly);
+          tl.setAttribute('x2', x + colW - 3);
+          tl.setAttribute('y2', ly);
+          g.appendChild(tl);
+        }
+      }
+
+      // 右欄：照片/票根框 + 消費記帳
+      let rightCurY = curY;
+      if (cfg.hasPhoto !== false && photoH > 0) {
+        renderPhotoFrame(g, rightX, rightCurY, colW, photoH, '拍立得 / 景點票根');
+        rightCurY += photoH + 5;
+      }
+
+      if (cfg.hasExpenses !== false) {
+        const thisExpH = colH - (rightCurY - curY);
+        renderExpenseSection(g, rightX, rightCurY, colW, '今日旅行消費 (EXPENSES)', '項目', '金額', expRows);
+      }
+
+      curY += colH + 5;
+
+      // 3. 底部旅行心得與微隨筆 (Travel Notes)
+      const bottomH = y + h - curY;
+      if (bottomH > 15) {
+        const tnTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        tnTitle.setAttribute('x', x);
+        tnTitle.setAttribute('y', curY + 4);
+        tnTitle.setAttribute('font-size', '3.2');
+        tnTitle.setAttribute('fill', state.lineColor);
+        tnTitle.textContent = '🗺 今日旅行故事與美好回憶 (MEMORIES & JOURNAL)';
+        g.appendChild(tnTitle);
+
+        const tnY = curY + 6;
+        const lCount = Math.floor((bottomH - 6) / 6.5);
+        for (let l = 1; l <= lCount; l++) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x);
+          line.setAttribute('y1', tnY + l * 6.5);
+          line.setAttribute('x2', x + w);
+          line.setAttribute('y2', tnY + l * 6.5);
+          g.appendChild(line);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    // 拍立得照片黏貼框
+    function renderPhotoFrame(g, x, y, w, h, titleText) {
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', w);
+      rect.setAttribute('height', h);
+      rect.setAttribute('fill', 'none');
+      rect.setAttribute('stroke', state.lineColor);
+      rect.setAttribute('stroke-width', '0.25');
+      rect.setAttribute('stroke-dasharray', '2, 2');
+      rect.setAttribute('rx', '1');
+      g.appendChild(rect);
+
+      // 四個相角標記 (Photo Corners)
+      const cSize = 4;
+      const corners = [
+        `M ${x} ${y+cSize} L ${x} ${y} L ${x+cSize} ${y}`,
+        `M ${x+w-cSize} ${y} L ${x+w} ${y} L ${x+w} ${y+cSize}`,
+        `M ${x} ${y+h-cSize} L ${x} ${y+h} L ${x+cSize} ${y+h}`,
+        `M ${x+w-cSize} ${y+h} L ${x+w} ${y+h} L ${x+w} ${y+h-cSize}`
+      ];
+      corners.forEach(d => {
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', d);
+        p.setAttribute('stroke', state.lineColor);
+        p.setAttribute('stroke-width', '0.6');
+        p.setAttribute('fill', 'none');
+        g.appendChild(p);
+      });
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', x + w / 2);
+      label.setAttribute('y', y + h / 2 + 1);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-size', '2.8');
+      label.setAttribute('fill', state.lineColor);
+      label.setAttribute('opacity', '0.6');
+      label.textContent = `📷 ${titleText}`;
+      g.appendChild(label);
+    }
+
+    // 日記清單小節渲染輔助
+    function renderJournalSection(g, x, y, w, title, rowCount, iconType) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', x);
+      label.setAttribute('y', y + 4);
+      label.setAttribute('font-size', '3.3');
+      label.setAttribute('fill', state.lineColor);
+      label.textContent = title;
+      g.appendChild(label);
+
+      let curY = y + 6;
+      const rowH = 6.5;
+
+      for (let i = 0; i < rowCount; i++) {
+        const lineY = curY + rowH;
+        if (iconType === 'box') {
+          const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          box.setAttribute('x', x);
+          box.setAttribute('y', lineY - 3.8);
+          box.setAttribute('width', '2.8');
+          box.setAttribute('height', '2.8');
+          box.setAttribute('fill', 'none');
+          box.setAttribute('stroke', state.lineColor);
+          box.setAttribute('stroke-width', '0.25');
+          box.setAttribute('rx', '0.5');
+          g.appendChild(box);
+        } else if (iconType === 'num') {
+          const num = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          num.setAttribute('x', x);
+          num.setAttribute('y', lineY - 1.2);
+          num.setAttribute('font-size', '2.8');
+          num.setAttribute('font-family', 'monospace');
+          num.setAttribute('fill', state.lineColor);
+          num.textContent = `${i + 1}.`;
+          g.appendChild(num);
+        } else if (iconType === 'heart') {
+          const heart = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          heart.setAttribute('x', x);
+          heart.setAttribute('y', lineY - 1.2);
+          heart.setAttribute('font-size', '2.8');
+          heart.setAttribute('fill', state.lineColor);
+          heart.textContent = '❤';
+          g.appendChild(heart);
+        }
+
+        const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', x + 5);
+        l.setAttribute('y1', lineY);
+        l.setAttribute('x2', x + w);
+        l.setAttribute('y2', lineY);
+        l.setAttribute('stroke', state.lineColor);
+        l.setAttribute('stroke-width', '0.2');
+        g.appendChild(l);
+
+        curY += rowH;
+      }
+      return curY + 4;
+    }
+
+    // 收支模組渲染
+    function renderExpenseSection(g, x, y, w, title, itemText, amountText, rowCount) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', x);
+      label.setAttribute('y', y + 4);
+      label.setAttribute('font-size', '3.3');
+      label.setAttribute('fill', state.lineColor);
+      label.textContent = `💰  ${title}`;
+      g.appendChild(label);
+
+      let curY = y + 6;
+      const rowH = 6;
+      const splitX = x + w - 22;
+
+      for (let i = 0; i < rowCount; i++) {
+        const lineY = curY + rowH;
+        const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', x);
+        l.setAttribute('y1', lineY);
+        l.setAttribute('x2', x + w);
+        l.setAttribute('y2', lineY);
+        l.setAttribute('stroke', state.lineColor);
+        l.setAttribute('stroke-width', '0.2');
+        g.appendChild(l);
+
+        const v = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        v.setAttribute('x1', splitX);
+        v.setAttribute('y1', curY);
+        v.setAttribute('x2', splitX);
+        v.setAttribute('y2', lineY);
+        v.setAttribute('stroke', state.lineColor);
+        v.setAttribute('stroke-width', '0.15');
+        v.setAttribute('stroke-dasharray', '1, 1');
+        g.appendChild(v);
+
+        curY += rowH;
+      }
+      return curY + 4;
+    }
+
+    function renderMonthlyPlanner(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('fill', 'none'); // 關鍵修復：全群組預設不填色，防止 SVG 預設黑塊
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const mo = state.monthly || { firstDay: 'mon', notesPos: 'bottom', notesRows: 4 };
+      const isLandscape = state.orientation === 'landscape';
+      const notesRows = (mo.notesRows !== undefined) ? mo.notesRows : 4;
+      const isRightNotes = isLandscape && (mo.notesPos === 'right') && notesRows > 0;
+      const isBottomNotes = (!isRightNotes) && notesRows > 0;
+
+      // 頂部年月標題欄 (高度 9mm)
+      const topH = 9;
+      const monthTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      monthTitle.setAttribute('x', x);
+      monthTitle.setAttribute('y', y + 6.2);
+      monthTitle.setAttribute('font-size', '4.0');
+      monthTitle.setAttribute('fill', state.lineColor);
+      monthTitle.setAttribute('stroke', 'none');
+      monthTitle.textContent = 'MONTH: ____________________  YEAR: 202___';
+      g.appendChild(monthTitle);
+
+      let gridX = x;
+      let gridY = y + topH + 3.5;
+      let gridW = w;
+      let gridH = h - topH - 3.5;
+
+      // 計算右側或下方備註欄所佔尺寸
+      let notesX = 0;
+      let notesY = 0;
+      let notesW = 0;
+      let notesH = 0;
+
+      if (isRightNotes) {
+        notesW = Math.min(65, Math.max(38, w * 0.25));
+        const gap = 4;
+        gridW = w - notesW - gap;
+        notesX = x + gridW + gap;
+        notesY = gridY;
+        notesH = gridH;
+      } else if (isBottomNotes) {
+        notesH = Math.min(gridH * 0.45, 6 + notesRows * 5.6);
+        const gap = 3.5;
+        gridH = gridH - notesH - gap;
+        notesX = x;
+        notesY = gridY + gridH + gap;
+        notesW = w;
+      }
+
+      // 1. 繪製月曆格 (7 欄 × 5 列)
+      const cols = 7;
+      const rows = 5;
+      const colW = gridW / cols;
+      const dayHeaderH = 5.5;
+      const calGridH = gridH - dayHeaderH;
+      const rowH = calGridH / rows;
+
+      // 星期標題 (支援週一或週日開始)
+      const weekDaysMon = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+      const weekDaysSun = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      const weekDays = (mo.firstDay === 'sun') ? weekDaysSun : weekDaysMon;
+
+      for (let c = 0; c < cols; c++) {
+        const dayLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dayLabel.setAttribute('x', gridX + c * colW + colW / 2);
+        dayLabel.setAttribute('y', gridY + 3.8);
+        dayLabel.setAttribute('text-anchor', 'middle');
+        dayLabel.setAttribute('font-size', '2.6');
+        dayLabel.setAttribute('fill', state.lineColor);
+        dayLabel.setAttribute('stroke', 'none');
+        dayLabel.textContent = weekDays[c];
+        g.appendChild(dayLabel);
+      }
+
+      const calStartY = gridY + dayHeaderH;
+
+      // 繪製月曆外框與主要格線
+      const calBorder = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      calBorder.setAttribute('x', gridX);
+      calBorder.setAttribute('y', calStartY);
+      calBorder.setAttribute('width', gridW);
+      calBorder.setAttribute('height', calGridH);
+      calBorder.setAttribute('fill', 'none');
+      g.appendChild(calBorder);
+
+      let gridPath = '';
+      for (let i = 1; i < cols; i++) {
+        const curX = gridX + i * colW;
+        gridPath += `M ${curX} ${calStartY} L ${curX} ${calStartY + calGridH} `;
+      }
+      for (let j = 1; j < rows; j++) {
+        const curY = calStartY + j * rowH;
+        gridPath += `M ${gridX} ${curY} L ${gridX + gridW} ${curY} `;
+      }
+      if (gridPath) {
+        const gp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        gp.setAttribute('d', gridPath);
+        gp.setAttribute('fill', 'none'); // 核心修復：路徑強制 fill="none"
+        gp.setAttribute('stroke-width', state.lineWidth.toString());
+        g.appendChild(gp);
+      }
+
+      // 關鍵修復：每日右上角乾淨「空白線框方格」（填色同紙張底色，絕對不會有一塊黑黑的）
+      const boxW = Math.min(colW * 0.38, 5.8);
+      const boxH = Math.min(rowH * 0.35, 4.5);
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cellX = gridX + c * colW;
+          const cellY = calStartY + r * rowH;
+          const bx = cellX + colW - boxW - 1.2;
+          const by = cellY + 1.2;
+
+          const dateBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          dateBox.setAttribute('x', bx);
+          dateBox.setAttribute('y', by);
+          dateBox.setAttribute('width', boxW);
+          dateBox.setAttribute('height', boxH);
+          dateBox.setAttribute('fill', 'none'); // 核心修復：強制純外框無填色
+          dateBox.setAttribute('stroke', state.lineColor);
+          dateBox.setAttribute('stroke-width', (Math.max(0.14, state.lineWidth * 0.85)).toString());
+          dateBox.setAttribute('rx', '0.6');
+          g.appendChild(dateBox);
+        }
+      }
+
+      // 2. 繪製備註欄 (Notes / To-Do List)
+      if (notesRows > 0 && (isRightNotes || isBottomNotes)) {
+        const notesBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        notesBox.setAttribute('x', notesX);
+        notesBox.setAttribute('y', notesY);
+        notesBox.setAttribute('width', notesW);
+        notesBox.setAttribute('height', notesH);
+        notesBox.setAttribute('fill', 'none');
+        notesBox.setAttribute('stroke', state.lineColor);
+        notesBox.setAttribute('stroke-width', state.lineWidth.toString());
+        notesBox.setAttribute('rx', '0.5');
+        g.appendChild(notesBox);
+
+        // 備註標題
+        const nTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nTitle.setAttribute('x', notesX + 3.2);
+        nTitle.setAttribute('y', notesY + 4.8);
+        nTitle.setAttribute('font-size', '2.8');
+        nTitle.setAttribute('fill', state.lineColor);
+        nTitle.setAttribute('stroke', 'none');
+        nTitle.textContent = '📝 NOTES & TO-DO:';
+        g.appendChild(nTitle);
+
+        const lineStartY = notesY + 7.2;
+        const availRowH = (notesY + notesH - lineStartY) / notesRows;
+
+        for (let l = 1; l <= notesRows; l++) {
+          const ly = lineStartY + (l - 1) * availRowH + availRowH;
+
+          // 方框 checkbox
+          const chk = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          chk.setAttribute('x', notesX + 3.2);
+          chk.setAttribute('y', ly - 3.2);
+          chk.setAttribute('width', '2.4');
+          chk.setAttribute('height', '2.4');
+          chk.setAttribute('fill', 'none');
+          chk.setAttribute('stroke', state.lineColor);
+          chk.setAttribute('stroke-width', '0.2');
+          chk.setAttribute('rx', '0.4');
+          g.appendChild(chk);
+
+          // 橫線
+          const nl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          nl.setAttribute('x1', notesX + 7.5);
+          nl.setAttribute('y1', ly);
+          nl.setAttribute('x2', notesX + notesW - 3);
+          nl.setAttribute('y2', ly);
+          nl.setAttribute('stroke', state.lineColor);
+          nl.setAttribute('stroke-width', (Math.max(0.12, state.lineWidth * 0.75)).toString());
+          nl.setAttribute('stroke-dasharray', '1.2, 1.2');
+          g.appendChild(nl);
+        }
+      }
+
+      root.appendChild(g);
+    }
+
+    function renderWeeklyPlanner(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const days = ['週一 MON', '週二 TUE', '週三 WED', '週四 THU', '週五 FRI', '週六 SAT', '週日 SUN'];
+
+      if (state.weeklyStyle === 'vertical') {
+        const colW = w / 7;
+        let d = '';
+        for (let i = 0; i <= 7; i++) {
+          d += `M ${x + i * colW} ${y} L ${x + i * colW} ${y + h} `;
+        }
+        for (let i = 0; i < 7; i++) {
+          d += `M ${x + i * colW} ${y + 8} L ${x + (i + 1) * colW} ${y + 8} `;
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', x + i * colW + colW / 2);
+          text.setAttribute('y', y + 5.5);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('font-size', '2.6');
+          text.setAttribute('fill', state.lineColor);
+          text.textContent = days[i];
+          g.appendChild(text);
+
+          const hourLines = 16;
+          const lineStep = (h - 8) / hourLines;
+          for (let hl = 1; hl < hourLines; hl++) {
+            d += `M ${x + i * colW} ${y + 8 + hl * lineStep} L ${x + (i + 1) * colW} ${y + 8 + hl * lineStep} `;
+          }
+        }
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        g.appendChild(path);
+      } else {
+        const rowH = h / 7;
+        let d = '';
+        for (let j = 0; j <= 7; j++) {
+          d += `M ${x} ${y + j * rowH} L ${x + w} ${y + j * rowH} `;
+        }
+        d += `M ${x + 24} ${y} L ${x + 24} ${y + h} `;
+
+        for (let j = 0; j < 7; j++) {
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', x + 12);
+          text.setAttribute('y', y + j * rowH + rowH / 2 + 1.2);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('font-size', '2.8');
+          text.setAttribute('fill', state.lineColor);
+          text.textContent = days[j];
+          g.appendChild(text);
+
+          const subLines = state.weeklySubLines || 3;
+          const subStep = rowH / (subLines + 1);
+          for (let s = 1; s <= subLines; s++) {
+            d += `M ${x + 24} ${y + j * rowH + s * subStep} L ${x + w} ${y + j * rowH + s * subStep} `;
+          }
+        }
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        g.appendChild(path);
+      }
+      root.appendChild(g);
+    }
+
+    function renderVerticalRuled(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const sp = Math.max(1, state.vertSpacing);
+      const cols = Math.floor(w / sp);
+      const startX = x + (w - cols * sp) / 2;
+
+      let d = '';
+      for (let i = 0; i <= cols; i++) {
+        const curX = startX + i * sp;
+        d += `M ${curX} ${y} L ${curX} ${y + h} `;
+      }
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      g.appendChild(path);
+      root.appendChild(g);
+    }
+
+    function renderCornell(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', (state.lineWidth * 1.5).toString());
+      g.setAttribute('opacity', state.lineOpacity);
+
+      const cueW = state.cornellCueWidth;
+      const sumH = state.cornellSummaryHeight;
+      const splitX = x + cueW;
+      const splitY = y + h - sumH;
+
+      const border = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      border.setAttribute('x', x);
+      border.setAttribute('y', y);
+      border.setAttribute('width', w);
+      border.setAttribute('height', h);
+      border.setAttribute('fill', 'none');
+      g.appendChild(border);
+
+      const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      vLine.setAttribute('x1', splitX);
+      vLine.setAttribute('y1', y);
+      vLine.setAttribute('x2', splitX);
+      vLine.setAttribute('y2', splitY);
+      g.appendChild(vLine);
+
+      const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      hLine.setAttribute('x1', x);
+      hLine.setAttribute('y1', splitY);
+      hLine.setAttribute('x2', x + w);
+      hLine.setAttribute('y2', splitY);
+      g.appendChild(hLine);
+
+      const cueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      cueText.setAttribute('x', x + 3);
+      cueText.setAttribute('y', y + 5);
+      cueText.setAttribute('font-size', '2.8');
+      cueText.setAttribute('fill', state.lineColor);
+      cueText.textContent = '提示欄 / 關鍵字 (CUE COLUMN)';
+      g.appendChild(cueText);
+
+      const sumText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      sumText.setAttribute('x', x + 3);
+      sumText.setAttribute('y', splitY + 5);
+      sumText.setAttribute('font-size', '2.8');
+      sumText.setAttribute('fill', state.lineColor);
+      sumText.textContent = '總結總覽 (SUMMARY)';
+      g.appendChild(sumText);
+
+      const noteW = w - cueW;
+      const noteH = splitY - y;
+      if (state.cornellGridType === 'ruled') {
+        const count = Math.floor(noteH / 7);
+        for (let i = 1; i <= count; i++) {
+          const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          l.setAttribute('x1', splitX);
+          l.setAttribute('y1', y + i * 7);
+          l.setAttribute('x2', x + w);
+          l.setAttribute('y2', y + i * 7);
+          l.setAttribute('stroke', state.lineColor);
+          l.setAttribute('stroke-width', state.lineWidth.toString());
+          g.appendChild(l);
+        }
+      } else if (state.cornellGridType === 'dot') {
+        renderDotGrid(g, splitX + 2, y + 2, noteW - 4, noteH - 4);
+      } else if (state.cornellGridType === 'grid') {
+        renderGrid(g, splitX, y, noteW, noteH);
+      }
+
+      root.appendChild(g);
+    }
+
+    function renderHexagon(root, x, y, w, h) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('stroke', state.lineColor);
+      g.setAttribute('stroke-width', state.lineWidth.toString());
+      g.setAttribute('opacity', state.lineOpacity);
+      g.setAttribute('fill', 'none');
+
+      const s = Math.max(1, state.hexSize);
+      const dx = s * Math.sqrt(3);
+      const dy = s * 1.5;
+
+      let d = '';
+      for (let row = 0; row * dy <= h + s; row++) {
+        const offsetX = (row % 2 === 1) ? dx / 2 : 0;
+        for (let col = 0; col * dx <= w + s; col++) {
+          const cx = x + col * dx + offsetX;
+          const cy = y + row * dy;
+          if (cx < x || cx > x + w || cy < y || cy > y + h) continue;
+
+          d += `M ${cx} ${cy - s} `;
+          for (let a = 1; a <= 6; a++) {
+            const rad = ((60 * a - 90) * Math.PI) / 180;
+            d += `L ${cx + s * Math.cos(rad)} ${cy + s * Math.sin(rad)} `;
+          }
+        }
+      }
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      g.appendChild(path);
+      root.appendChild(g);
+    }
+
+    /* ==========================================================================
+       直接匯出 PDF 檔案功能 (支援多頁連續頁碼批次下載)
+       ========================================================================== */
+    async function exportToPdf() {
+      const btn = document.getElementById('downloadPdfBtn');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>正在生成 PDF...</span>`;
+      lucide.createIcons();
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const { width, height } = getPageDimensions();
+        const orient = state.orientation === 'landscape' ? 'l' : 'p';
+        const pageCount = parseInt(document.getElementById('pdfPageCount').value || '1');
+
+        const pdf = new jsPDF({
+          orientation: orient,
+          unit: 'mm',
+          format: [width, height],
+          compress: true
+        });
+
+        for (let p = 1; p <= pageCount; p++) {
+          if (p > 1) pdf.addPage([width, height], orient);
+
+          // 更新頁尾頁碼
+          const root = document.getElementById('svgContentRoot');
+          root.innerHTML = '';
+
+          const leftMargin = state.margin + state.gutter;
+          const rightMargin = width - state.margin;
+          let topMargin = state.margin;
+          let bottomMargin = height - state.margin;
+
+          renderPunchAndGutter(root, width, height, leftMargin);
+
+          if (state.enableHeader) {
+            const headerH = 14;
+            renderHeader(root, leftMargin, topMargin, rightMargin - leftMargin, headerH);
+            topMargin += headerH + 3;
+          }
+
+          if (state.footerPageNum !== 'none') {
+            const footerH = 8;
+            renderFooter(root, leftMargin, bottomMargin - footerH, rightMargin - leftMargin, footerH, p);
+            bottomMargin -= footerH + 2;
+          }
+
+          renderPattern(root, leftMargin, topMargin, rightMargin - leftMargin, bottomMargin - topMargin);
+
+          // 將 SVG 轉換為高畫質點陣圖並注入 PDF 頁面
+          const svgEl = document.getElementById('notebookSvg');
+          const svgData = new XMLSerializer().serializeToString(svgEl);
+          const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(svgBlob);
+
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              // 提升倍率至 3.0，確保 0.15mm 的細線在 Canvas 上至少有 1.7 個完整像素
+              const scale = 3.0;
+              canvas.width = Math.round(width * 3.7795 * scale);
+              canvas.height = Math.round(height * 3.7795 * scale);
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.fillStyle = state.paperBg;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              // 關鍵修復：全面改用無損 PNG 格式，防止 JPEG 破壞性壓縮把超細淡色線條抹平
+              const imgData = canvas.toDataURL('image/png');
+              pdf.addImage(imgData, 'PNG', 0, 0, width, height, undefined, 'FAST');
+              URL.revokeObjectURL(url);
+              resolve();
+            };
+            img.src = url;
+          });
+        }
+
+        // 下載檔案
+        const fileName = `Notebook_${state.patternType}_${state.pageSize}_${pageCount}pages.pdf`;
+        pdf.save(fileName);
+        showToast(`已成功下載 ${pageCount} 頁 PDF 文件！`);
+      } catch (err) {
+        console.error('PDF 生成失敗:', err);
+        showToast('PDF 匯出失敗，請重試或使用列印功能');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+        lucide.createIcons();
+        updateGenerator(); // 還原預覽第一頁
+      }
+    }
+
+    /* ==========================================================================
+       樣板快速套用與開關預設
+       ========================================================================== */
+    function applyPreset(type) {
+      if (type === 'grid') {
+        state.pageSize = 'A4';
+        state.patternType = 'grid';
+        state.gridSize = 5;
+        state.paperBg = '#fefbf3';
+        state.lineColor = '#cbd5e1';
+      } else if (type === 'cornell') {
+        state.pageSize = 'B5';
+        state.patternType = 'cornell';
+        state.paperBg = '#ffffff';
+        state.lineColor = '#94a3b8';
+      } else if (type === 'manuscript') {
+        state.pageSize = 'A4';
+        state.patternType = 'manuscript';
+        state.manuscript.charsPerLine = 25;
+        state.manuscript.boxSize = 7.5;
+        state.paperBg = '#ffffff';
+        state.lineColor = '#b91c1c';
+      } else if (type === 'journal') {
+        state.pageSize = 'A5';
+        state.patternType = 'journal';
+        state.paperBg = '#fefbf3';
+        state.lineColor = '#64748b';
+        state.journalLang = 'zh';
+      }
+
+      // 同步介面表單數值
+      const ps = document.getElementById('pageSize');
+      if (ps) ps.value = state.pageSize;
+      const pt = document.getElementById('patternType');
+      if (pt) pt.value = state.patternType;
+      const pb = document.getElementById('paperBgColor');
+      if (pb) pb.value = state.paperBg;
+      const lc = document.getElementById('lineColor');
+      if (lc) lc.value = state.lineColor;
+
+      buildDynamicControls();
+      updateGenerator();
+      fitInitialZoom();
+      showToast('已套用範本！');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const text = document.getElementById('toastMsg');
+      if (!toast || !text) return;
+      text.innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    /* ==========================================================================
+       下載完整 HTML 原始檔 (單檔保存離線使用)
+       ========================================================================== */
+    function downloadHtmlFile() {
+      const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'notebook_page_generator.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已成功下載 HTML 檔案！可隨時離線開啟使用。');
+    }
+
+    // 初始化載入
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      buildDynamicControls();
+      updateGenerator();
+      setTimeout(fitInitialZoom, 60);
+
+      // 動態將今天的日期格式化為 YYYY.MM.DD
+      const dateEl = document.getElementById('appUpdatedDate');
+      if (dateEl) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        dateEl.innerText = `Updated: ${y}.${m}.${d}`;
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      fitInitialZoom();
+    });
+  </script>
+</body>
+</html>
