@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 找代課幫手 - 多位教師智慧排代系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; }
+        .academic-blue { background-color: #1e3a8a; }
+        .academic-blue-text { color: #1e3a8a; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); }
+        .btn-primary { background-color: #1e3a8a; color: white; transition: all 0.25s ease; }
+        .btn-primary:hover { background-color: #172554; }
+        .table-header { background-color: #f8fafc; color: #475569; }
+        .tag-p1 { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-weight: 600; }
+        .tag-p2 { background-color: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-weight: 500; }
+        .tag-p3 { background-color: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+        .template-btn { color: #1e3a8a; border: 1px solid #93c5fd; transition: all 0.2s; }
+        .template-btn:hover { background-color: #eff6ff; }
+        
+        .day-chip input[type="checkbox"] { display: none; }
+        .day-chip span { 
+            display: inline-block; 
+            padding: 4px 11px; 
+            border-radius: 6px; 
+            border: 1px solid #cbd5e1; 
+            font-size: 13px; 
+            cursor: pointer; 
+            background: white;
+            transition: all 0.2s;
+        }
+        .day-chip input[type="checkbox"]:checked + span {
+            background-color: #1e3a8a;
+            border-color: #1e3a8a;
+            color: white;
+            font-weight: 700;
+        }
+
+        .period-config-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            border: 1px solid #f1f5f9;
+        }
+
+        /* 標籤徽章色系庫 */
+        .badge-teacher {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+    </style>
+</head>
+<body class="p-3 md:p-6 text-slate-800">
+
+    <main class="max-w-7xl mx-auto w-full flex-1">
+        <!-- Header -->
+        <header class="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between border-b pb-5 gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-xl bg-blue-900 text-white flex items-center justify-center shadow-md">
+                    <i data-lucide="graduation-cap" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-2xl md:text-3xl font-extrabold academic-blue-text tracking-tight">AI 找代課幫手</h1>
+                        <span class="bg-indigo-100 text-indigo-800 text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">多師聯立版 v2.0</span>
+                    </div>
+                    <p class="text-slate-500 text-xs md:text-sm mt-0.5">支援同時排定多位教師請假・自動互斥排堂防呆・精準媒合推薦</p>
+                </div>
+            </div>
+            <div class="text-left md:text-right flex flex-col items-start md:items-end">
+                <span class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
+                    教務處教學組／行政支援專用
+                </span>
+                <p id="current-date" class="text-xs text-slate-400 mt-1"></p>
+                <div class="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                    <span class="font-medium text-slate-500">製作：AI練習曲</span>
+                    <span>•</span>
+                    <span id="header-updated-date" class="font-medium">Updated: 2026-09-30</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column (Inputs: Data & Multiple Requests) -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Part 1: File Upload & Templates -->
+                <section class="card p-5 border-t-4 border-blue-800">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="flex items-center text-base font-bold academic-blue-text">
+                            <i data-lucide="database" class="w-4 h-4 mr-2 text-blue-700"></i> 第一部分：總課表資料準備
+                        </h2>
+                        <span id="loadBadge" class="text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">尚未載入</span>
+                    </div>
+
+                    <!-- 分日節數配置收摺面板 -->
+                    <details class="mb-4 bg-slate-50 rounded-lg border border-slate-200 p-3 text-xs">
+                        <summary class="font-bold text-slate-700 cursor-pointer flex items-center justify-between select-none">
+                            <span class="flex items-center"><i data-lucide="settings-2" class="w-3.5 h-3.5 mr-1.5 text-blue-600"></i> 範本上課天數與每日節數設定</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                        </summary>
+                        <div class="mt-3 pt-3 border-t border-slate-200 space-y-3">
+                            <div class="flex flex-wrap gap-1.5" id="daySelector">
+                                <label class="day-chip"><input type="checkbox" value="星期一" checked onchange="togglePeriodInput(this)"><span>一</span></label>
+                                <label class="day-chip"><input type="checkbox" value="星期二" checked onchange="togglePeriodInput(this)"><span>二</span></label>
+                                <label class="day-chip"><input type="checkbox" value="星期三" checked onchange="togglePeriodInput(this)"><span>三</span></label>
+                                <label class="day-chip"><input type="checkbox" value="星期四" checked onchange="togglePeriodInput(this)"><span>四</span></label>
+                                <label class="day-chip"><input type="checkbox" value="星期五" checked onchange="togglePeriodInput(this)"><span>五</span></label>
+                                <label class="day-chip"><input type="checkbox" value="星期六" onchange="togglePeriodInput(this)"><span>六</span></label>
+                            </div>
+                            <div id="periodConfigContainer" class="max-h-36 overflow-y-auto pr-1"></div>
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <button onclick="downloadTemplate('teacher')" class="template-btn py-1.5 px-2 rounded text-[11px] font-semibold flex items-center justify-center bg-white shadow-sm">
+                                    <i data-lucide="file-down" class="w-3.5 h-3.5 mr-1"></i> 下載教師課表範本
+                                </button>
+                                <button onclick="downloadTemplate('class')" class="template-btn py-1.5 px-2 rounded text-[11px] font-semibold flex items-center justify-center bg-white shadow-sm">
+                                    <i data-lucide="file-down" class="w-3.5 h-3.5 mr-1"></i> 下載班級課表範本
+                                </button>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- 上傳區塊 -->
+                    <div class="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-4 text-center transition-all bg-white relative group">
+                        <input type="file" id="fileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" multiple accept=".xlsx,.xls,.csv">
+                        <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto text-blue-500 group-hover:scale-110 transition-transform mb-1"></i>
+                        <p class="text-xs font-bold text-slate-700">點擊或拖曳教師總課表 / 班級課表至此</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">支援多檔案同時解析 (.xlsx, .xls)</p>
+                    </div>
+
+                    <div id="fileList" class="mt-2 text-xs text-slate-500 space-y-1 max-h-20 overflow-y-auto"></div>
+                    <div id="parseStatus" class="hidden mt-2 py-1.5 px-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg border border-emerald-200 flex items-center font-medium">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1.5 shrink-0 text-emerald-600"></i>
+                        <span id="parseStatusText">已就緒</span>
+                    </div>
+                </section>
+
+                <!-- Part 2: Multi-Teacher Absence Input -->
+                <section class="card p-5 border-t-4 border-indigo-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="flex items-center text-base font-bold text-indigo-950">
+                            <i data-lucide="users" class="w-4 h-4 mr-2 text-indigo-600"></i> 第二部分：請假教師名單安排
+                        </h2>
+                        <span id="leaveCountBadge" class="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full font-bold">
+                            0 位請假中
+                        </span>
+                    </div>
+
+                    <!-- 新增請假人員表單 -->
+                    <div class="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-100 space-y-3">
+                        <p class="text-xs font-bold text-indigo-900 flex items-center">
+                            <i data-lucide="user-plus" class="w-3.5 h-3.5 mr-1.5"></i> 新增請假登記
+                        </p>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">選擇請假教師姓名</label>
+                            <div class="relative">
+                                <input type="text" id="absentTeacherInput" list="teacherList" placeholder="輸入或下拉選擇教師姓名..." class="w-full border-slate-300 rounded-lg shadow-sm py-2 px-3 text-xs md:text-sm border focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none pr-8">
+                                <datalist id="teacherList"></datalist>
+                                <button type="button" onclick="clearTeacherInput()" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">開始日期</label>
+                                <input type="date" id="startDateInput" class="w-full border-slate-300 rounded-lg shadow-sm p-1.5 text-xs border focus:ring-2 focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">結束日期 (可同日)</label>
+                                <input type="date" id="endDateInput" class="w-full border-slate-300 rounded-lg shadow-sm p-1.5 text-xs border focus:ring-2 focus:ring-indigo-500 outline-none">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 pt-1">
+                            <button type="button" onclick="addLeaveTeacher()" class="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm flex items-center justify-center space-x-1.5 transition">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                <span>加入請假清單</span>
+                            </button>
+                            <button type="button" onclick="batchAddPrompt()" title="一次批次選多位同日期請假的老師" class="py-2 px-2.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg text-xs font-semibold flex items-center justify-center transition">
+                                <i data-lucide="user-check" class="w-4 h-4 mr-1"></i> 批次勾選
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 已登記之請假教師標籤清單 -->
+                    <div class="mt-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-xs font-bold text-slate-700 flex items-center">
+                                <i data-lucide="clipboard-list" class="w-3.5 h-3.5 mr-1 text-slate-500"></i> 本次待媒合請假名單：
+                            </label>
+                            <button onclick="clearAllLeaves()" class="text-[11px] text-red-500 hover:text-red-700 hover:underline">全部清空</button>
+                        </div>
+
+                        <div id="leavesContainer" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            <div id="noLeavesNotice" class="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                                尚未加入任何請假教師<br><span class="text-[10px] text-slate-400 mt-1 block">請由上方表單加入一位或多位請假老師</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 執行媒合按鈕 -->
+                <button onclick="performMatch()" class="w-full py-3.5 rounded-xl btn-primary font-bold shadow-md hover:shadow-lg flex items-center justify-center space-x-2 text-sm md:text-base">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+                    <span>開始多位教師智慧排代</span>
+                </button>
+            </div>
+
+            <!-- Right Column (Results) -->
+            <div class="lg:col-span-7 space-y-6">
+                <section class="card min-h-[640px] flex flex-col border-t-4 border-emerald-600">
+                    
+                    <!-- 標頭與工具列 -->
+                    <div class="p-4 md:p-5 border-b bg-slate-50/60 rounded-t-xl">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                                    <i data-lucide="list-checks" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-800">第三部分：媒合建議結果</h2>
+                                    <p class="text-xs text-slate-500">自動避開同時段其他請假教師，並優先推薦同班級同科目任課師資</p>
+                                </div>
+                            </div>
+                            <div id="resultCount" class="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200 self-start md:self-auto hidden"></div>
+                        </div>
+
+                        <!-- 依教師過濾篩選器 (動態產生) -->
+                        <div id="filterBar" class="hidden mt-3 pt-3 border-t border-slate-200 flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-bold text-slate-600 flex items-center">
+                                <i data-lucide="filter" class="w-3 h-3 mr-1"></i> 檢視篩選：
+                            </span>
+                            <div id="filterPills" class="flex flex-wrap gap-1.5">
+                                <!-- 動態注入按鈕 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 內容展示區 -->
+                    <div id="resultArea" class="flex-grow overflow-x-auto p-4 md:p-6">
+                        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-slate-400 py-24 text-center">
+                            <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                                <i data-lucide="calendar-heart" class="w-8 h-8 text-slate-400"></i>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-600">尚未產生媒合結果</h3>
+                            <p class="text-xs mt-1 text-slate-400 max-w-sm">請先上傳總課表檔案，並在左側新增一位或多位請假教師與期間，點擊「開始多位教師智慧排代」</p>
+                        </div>
+
+                        <!-- 結果表格 -->
+                        <div id="tableWrapper" class="hidden overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
+                            <table id="resultTable" class="w-full text-left text-xs md:text-sm">
+                                <thead class="table-header border-b">
+                                    <tr>
+                                        <th class="px-3.5 py-3 font-bold text-slate-700 whitespace-nowrap">請假教師</th>
+                                        <th class="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">日期</th>
+                                        <th class="px-2 py-3 font-bold text-slate-700 whitespace-nowrap">節次</th>
+                                        <th class="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">班級 / 科目</th>
+                                        <th class="px-4 py-3 font-bold text-slate-700">建議代課人選</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultBody" class="divide-y divide-slate-100 bg-white"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 底部匯出工具 -->
+                    <div id="actionFooter" class="hidden p-4 bg-slate-50 border-t rounded-b-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <div class="text-xs text-slate-500">
+                            💡 提示：推薦分為「優先（同班同科）」、「次要（同班任課老師）」與「其他無堂教師」。
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="downloadResults('all')" class="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg shadow font-medium flex items-center space-x-1.5 text-xs transition">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                <span>匯出全部排代表 (.xlsx)</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- 批次選擇教師彈跳視窗 (Modal) -->
+    <div id="batchModal" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-4 bg-indigo-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="users" class="w-5 h-5 text-indigo-300"></i>
+                    <h3 class="font-bold text-sm">批次勾選請假教師</h3>
+                </div>
+                <button onclick="closeBatchModal()" class="text-indigo-200 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-4 border-b bg-slate-50 space-y-2">
+                <p class="text-xs text-slate-600 font-medium">所選教師將套用下列統一日期：</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <span class="text-[11px] text-slate-500">開始日期</span>
+                        <input type="date" id="batchStartDate" class="w-full border rounded-md p-1.5 text-xs">
+                    </div>
+                    <div>
+                        <span class="text-[11px] text-slate-500">結束日期</span>
+                        <input type="date" id="batchEndDate" class="w-full border rounded-md p-1.5 text-xs">
+                    </div>
+                </div>
+                <div class="relative mt-2">
+                    <input type="text" id="batchFilterInput" oninput="filterBatchTeacherList()" placeholder="搜尋教師姓名..." class="w-full border rounded-md px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1 space-y-1" id="batchTeacherCheckboxes">
+                <!-- 動態注入多選框 -->
+            </div>
+            <div class="p-3 bg-slate-50 border-t flex justify-between items-center">
+                <button onclick="toggleAllBatchCheckboxes(true)" class="text-xs text-indigo-700 hover:underline">全選</button>
+                <div class="space-x-2">
+                    <button onclick="closeBatchModal()" class="px-3 py-1.5 rounded-md text-xs border text-slate-600 hover:bg-slate-100">取消</button>
+                    <button onclick="applyBatchAdd()" class="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white font-bold hover:bg-indigo-700">加入名單</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自訂訊息 Toast / Alert 代替 alert() -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-xl text-white text-xs font-semibold flex items-center space-x-2 transition-all duration-300">
+        <i id="toastIcon" data-lucide="info" class="w-4 h-4"></i>
+        <span id="toastMsg">訊息內容</span>
+    </div>
+
+    <!-- 自訂確認對話盒代替 confirm() -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4">
+            <div class="flex items-center space-x-3 text-amber-600">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <h4 class="font-bold text-slate-800" id="confirmTitle">請確認操作</h4>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed" id="confirmMessage">確定要執行這項操作嗎？</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button id="confirmCancelBtn" class="px-3 py-1.5 text-xs rounded-lg border text-slate-600 hover:bg-slate-100 font-medium">取消</button>
+                <button id="confirmOkBtn" class="px-4 py-1.5 text-xs rounded-lg bg-blue-800 text-white font-bold hover:bg-blue-900">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-8 border-t py-6 text-center text-slate-500">
+        <div class="flex flex-col items-center space-y-2">
+            <div class="flex flex-wrap items-center justify-center gap-2 text-xs md:text-sm">
+                <span class="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-0.5 rounded-full font-bold">版本資訊：v2.0 (多師聯立版)</span>
+                <span class="text-slate-300">|</span>
+                <span class="font-semibold text-slate-700 flex items-center">
+                    <i data-lucide="code-2" class="w-3.5 h-3.5 mr-1 text-indigo-600"></i> 製作：AI練習曲
+                </span>
+                <span class="text-slate-300">|</span>
+                <span class="text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">歡迎分享，請勿商用</span>
+            </div>
+            <div class="flex items-center justify-center space-x-2 text-xs text-slate-400">
+                <span id="footer-updated-date">Updated: 2026-09-30</span>
+                <span>•</span>
+                <span>© 學校行政輔助系統・版權所有</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loader -->
+    <div id="loader" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center space-y-3">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-700"></div>
+            <p id="loaderText" class="text-slate-700 font-bold text-xs tracking-wide">正在運算多位教師排代課表中...</p>
+        </div>
+    </div>
+
+    <script>
+        // 資料狀態存儲
+        let teachersData = {}; 
+        let classesData = {};  
+        let timeSlots = [];    
+        
+        // 請假教師陣列：每項格式 { id, teacher, startDate, endDate }
+        let leaveRequests = [];
+        
+        // 目前媒合結果列表
+        let currentMatches = [];
+        let activeFilterTeacher = 'ALL';
+
+        // 隨機分配固定色票給每位請假教師便於辨識
+        const teacherColors = [
+            { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }, // amber
+            { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe' }, // indigo
+            { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' }, // pink
+            { bg: '#ccfbf1', text: '#115e59', border: '#99f6e4' }, // teal
+            { bg: '#ffedd5', text: '#9a3412', border: '#fed7aa' }, // orange
+            { bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe' }, // purple
+            { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' }, // emerald
+            { bg: '#e2e8f0', text: '#334155', border: '#cbd5e1' }  // slate
+        ];
+
+        function getTeacherColor(teacherName) {
+            let hash = 0;
+            for (let i = 0; i < teacherName.length; i++) {
+                hash = teacherName.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % teacherColors.length;
+            return teacherColors[index];
+        }
+
+        function initIcons(retries = 5) {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            else if (retries > 0) setTimeout(() => initIcons(retries - 1), 200);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initIcons();
+            const now = new Date();
+            const formattedFullDate = new Intl.DateTimeFormat('zh-TW', { dateStyle: 'full' }).format(now);
+            const isoToday = now.toISOString().split('T')[0];
+
+            document.getElementById('current-date').innerText = formattedFullDate;
+
+            document.getElementById('fileUpload').addEventListener('change', handleFiles);
+            
+            // 初始化分日節數
+            document.querySelectorAll('#daySelector input').forEach(togglePeriodInput);
+
+            // 預設日期為今日
+            document.getElementById('startDateInput').value = isoToday;
+            document.getElementById('endDateInput').value = isoToday;
+        });
+
+        // 訊息吐司替代 alert
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMsg');
+            const iconEl = document.getElementById('toastIcon');
+
+            msgEl.innerText = message;
+            toast.className = `fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-xl text-white text-xs font-semibold flex items-center space-x-2 transition-all duration-300 ${
+                type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-blue-800'
+            }`;
+            
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3200);
+        }
+
+        // 自訂確認框替代 confirm
+        function customConfirm(title, message) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirmModal');
+                document.getElementById('confirmTitle').innerText = title;
+                document.getElementById('confirmMessage').innerText = message;
+                modal.classList.remove('hidden');
+
+                const okBtn = document.getElementById('confirmOkBtn');
+                const cancelBtn = document.getElementById('confirmCancelBtn');
+
+                const cleanup = (val) => {
+                    modal.classList.add('hidden');
+                    okBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    resolve(val);
+                };
+
+                okBtn.onclick = () => cleanup(true);
+                cancelBtn.onclick = () => cleanup(false);
+            });
+        }
+
+        function togglePeriodInput(checkbox) {
+            const container = document.getElementById('periodConfigContainer');
+            const dayValue = checkbox.value;
+            const existingRow = document.getElementById(`config-${dayValue}`);
+
+            if (checkbox.checked) {
+                if (!existingRow) {
+                    const row = document.createElement('div');
+                    row.id = `config-${dayValue}`;
+                    row.className = 'period-config-row';
+                    const defaultPeriods = dayValue === '星期六' ? 4 : 8;
+                    row.innerHTML = `
+                        <span class="text-xs font-bold text-slate-700">${dayValue}</span>
+                        <div class="flex items-center space-x-1">
+                            <input type="number" value="${defaultPeriods}" min="1" max="15" 
+                                   class="period-input w-12 text-center text-xs font-bold border rounded p-1 text-blue-800 border-blue-200 outline-none">
+                            <span class="text-[10px] text-slate-400">節</span>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                }
+            } else {
+                if (existingRow) existingRow.remove();
+            }
+        }
+
+        // 下載課表範本
+        function downloadTemplate(type) {
+            const configRows = document.querySelectorAll('.period-config-row');
+            if (configRows.length === 0) {
+                showToast("請至少勾選一個上課天數。", "error");
+                return;
+            }
+
+            let header = [];
+            let fileName = "";
+            let rowData = {};
+
+            if (type === 'teacher') {
+                header.push("教師 / 時段");
+                fileName = "教師總表範本.xlsx";
+                rowData["教師 / 時段"] = "教師姓名範例";
+            } else {
+                header.push("班級 / 時段");
+                fileName = "班級總表範本.xlsx";
+                rowData["班級 / 時段"] = "班級名稱範例";
+            }
+
+            configRows.forEach(row => {
+                const dayName = row.querySelector('span').innerText;
+                const periods = parseInt(row.querySelector('input').value) || 8;
+                for (let i = 1; i <= periods; i++) {
+                    const colName = `${dayName} 第${i}節`;
+                    header.push(colName);
+                    rowData[colName] = type === 'teacher' ? "科目 (班級)" : "科目 (老師)";
+                }
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet([rowData], { header: header });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "範本");
+            XLSX.writeFile(workbook, fileName);
+            showToast(`已成功下載 ${fileName}`, "success");
+        }
+
+        async function handleFiles(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+            
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('loaderText').innerText = "正在讀取課表檔案...";
+            document.getElementById('fileList').innerHTML = Array.from(files).map(f => `<div class="truncate">📄 ${f.name}</div>`).join('');
+
+            teachersData = {};
+            classesData = {};
+            timeSlots = [];
+            
+            for (let file of files) {
+                await parseFile(file);
+            }
+
+            updateTeacherDatalist();
+
+            document.getElementById('loader').classList.add('hidden');
+            const tCount = Object.keys(teachersData).length;
+            const cCount = Object.keys(classesData).length;
+
+            if (tCount > 0) {
+                const statusBadge = document.getElementById('loadBadge');
+                statusBadge.innerText = `${tCount} 位教師已載入`;
+                statusBadge.className = "text-[11px] px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold";
+
+                document.getElementById('parseStatus').classList.remove('hidden');
+                document.getElementById('parseStatusText').innerText = 
+                    `讀取完成：已成功解析 ${tCount} 位教師課表，${cCount} 個班級課表。`;
+                showToast(`已讀取 ${tCount} 位教師課表資料！`, "success");
+            } else {
+                showToast("未從檔案中辨識出「教師 / 時段」課表，請檢查檔案格式！", "error");
+            }
+        }
+
+        function updateTeacherDatalist() {
+            const list = document.getElementById('teacherList');
+            list.innerHTML = '';
+            const sortedTeachers = Object.keys(teachersData).sort((a,b) => a.localeCompare(b, 'zh-TW'));
+            sortedTeachers.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                list.appendChild(option);
+            });
+        }
+
+        function parseFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = e.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                        if (rows.length < 1) { resolve(); return; }
+
+                        const header = rows[0];
+                        const isTeacherFile = header[0] && (header[0].includes("教師") || header[0].includes("老師"));
+                        const isClassFile = header[0] && header[0].includes("班級");
+
+                        for(let i = 1; i < header.length; i++) {
+                            if(header[i] && header[i].includes("星期")) {
+                                if(!timeSlots.includes(header[i])) timeSlots.push(header[i]);
+                            }
+                        }
+
+                        for (let i = 1; i < rows.length; i++) {
+                            const row = rows[i];
+                            const name = row[0];
+                            if (!name || String(name).includes("時段") || String(name).includes("範例")) continue;
+
+                            let schedule = {};
+                            header.forEach((h, idx) => {
+                                if (h && h.includes("星期")) {
+                                    schedule[h] = row[idx] ? String(row[idx]).trim() : "";
+                                }
+                            });
+
+                            if (isTeacherFile || !isClassFile) {
+                                teachersData[String(name).trim()] = schedule;
+                            } else if (isClassFile) {
+                                classesData[String(name).trim()] = schedule;
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Parse error:", err);
+                    }
+                    resolve();
+                };
+                reader.readAsBinaryString(file);
+            });
+        }
+
+        function clearTeacherInput() {
+            document.getElementById('absentTeacherInput').value = '';
+            document.getElementById('absentTeacherInput').focus();
+        }
+
+        // 新增單一請假老師至清單
+        function addLeaveTeacher() {
+            const teacherInput = document.getElementById('absentTeacherInput');
+            const teacher = teacherInput.value.trim();
+            const start = document.getElementById('startDateInput').value;
+            const end = document.getElementById('endDateInput').value || start;
+
+            if (!teacher) {
+                showToast("請輸入或選擇請假教師姓名！", "error");
+                return;
+            }
+
+            if (!teachersData[teacher]) {
+                showToast(`課表中找不到「${teacher}」的課表資料，請確認拼字或先上傳課表。`, "error");
+                return;
+            }
+
+            if (!start) {
+                showToast("請選擇請假開始日期！", "error");
+                return;
+            }
+
+            if (new Date(end) < new Date(start)) {
+                showToast("結束日期不得早於開始日期！", "error");
+                return;
+            }
+
+            // 檢查是否已在清單中
+            const exists = leaveRequests.find(r => r.teacher === teacher && r.startDate === start && r.endDate === end);
+            if (exists) {
+                showToast(`${teacher} 在此日期區間已在請假名單中。`, "info");
+                return;
+            }
+
+            leaveRequests.push({
+                id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                teacher: teacher,
+                startDate: start,
+                endDate: end
+            });
+
+            teacherInput.value = '';
+            renderLeaveRequests();
+            showToast(`已加入請假名單：${teacher}`, "success");
+        }
+
+        // 批次勾選 Modal 操作
+        function batchAddPrompt() {
+            const allTeachers = Object.keys(teachersData).sort((a,b) => a.localeCompare(b, 'zh-TW'));
+            if (allTeachers.length === 0) {
+                showToast("請先上傳總課表檔案以讀取教師名單！", "error");
+                return;
+            }
+
+            const modal = document.getElementById('batchModal');
+            const container = document.getElementById('batchTeacherCheckboxes');
+            
+            // 預設日期
+            document.getElementById('batchStartDate').value = document.getElementById('startDateInput').value;
+            document.getElementById('batchEndDate').value = document.getElementById('endDateInput').value;
+
+            container.innerHTML = allTeachers.map(name => {
+                const color = getTeacherColor(name);
+                return `
+                    <label class="batch-teacher-item flex items-center justify-between p-2 rounded-lg hover:bg-indigo-50/50 cursor-pointer border border-transparent hover:border-indigo-100">
+                        <span class="text-xs font-semibold text-slate-700 flex items-center">
+                            <span class="w-2.5 h-2.5 rounded-full mr-2" style="background-color: ${color.text}"></span>
+                            ${name}
+                        </span>
+                        <input type="checkbox" value="${name}" class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
+                    </label>
+                `;
+            }).join('');
+
+            modal.classList.remove('hidden');
+            initIcons();
+        }
+
+        function closeBatchModal() {
+            document.getElementById('batchModal').classList.add('hidden');
+        }
+
+        function filterBatchTeacherList() {
+            const term = document.getElementById('batchFilterInput').value.toLowerCase();
+            document.querySelectorAll('.batch-teacher-item').forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(term) ? 'flex' : 'none';
+            });
+        }
+
+        function toggleAllBatchCheckboxes(check) {
+            const visible = Array.from(document.querySelectorAll('.batch-teacher-item'))
+                .filter(el => el.style.display !== 'none');
+            visible.forEach(el => {
+                const cb = el.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = check;
+            });
+        }
+
+        function applyBatchAdd() {
+            const start = document.getElementById('batchStartDate').value;
+            const end = document.getElementById('batchEndDate').value || start;
+
+            if (!start) {
+                showToast("請設定批次請假的開始日期！", "error");
+                return;
+            }
+
+            const checkedBoxes = Array.from(document.querySelectorAll('#batchTeacherCheckboxes input:checked'));
+            if (checkedBoxes.length === 0) {
+                showToast("請至少勾選一位教師！", "error");
+                return;
+            }
+
+            let addedCount = 0;
+            checkedBoxes.forEach(cb => {
+                const teacher = cb.value;
+                const exists = leaveRequests.find(r => r.teacher === teacher && r.startDate === start && r.endDate === end);
+                if (!exists) {
+                    leaveRequests.push({
+                        id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        teacher: teacher,
+                        startDate: start,
+                        endDate: end
+                    });
+                    addedCount++;
+                }
+            });
+
+            closeBatchModal();
+            renderLeaveRequests();
+            showToast(`成功批次加入 ${addedCount} 位請假教師！`, "success");
+        }
+
+        function renderLeaveRequests() {
+            const container = document.getElementById('leavesContainer');
+            const countBadge = document.getElementById('leaveCountBadge');
+            
+            countBadge.innerText = `${leaveRequests.length} 位請假中`;
+
+            if (leaveRequests.length === 0) {
+                container.innerHTML = `
+                    <div id="noLeavesNotice" class="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        尚未加入任何請假教師<br><span class="text-[10px] text-slate-400 mt-1 block">請由上方表單加入一位或多位請假老師</span>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = leaveRequests.map((req, idx) => {
+                const color = getTeacherColor(req.teacher);
+                const isSingleDay = req.startDate === req.endDate;
+                const dateText = isSingleDay ? req.startDate : `${req.startDate} ~ ${req.endDate}`;
+                return `
+                    <div class="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs hover:border-indigo-300 transition">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold" style="background-color: ${color.bg}; color: ${color.text}; border: 1px solid ${color.border}">
+                                ${req.teacher}
+                            </span>
+                            <span class="text-xs text-slate-600 font-medium">
+                                📅 ${dateText}
+                            </span>
+                        </div>
+                        <button onclick="removeLeaveRequest('${req.id}')" title="移除" class="text-slate-400 hover:text-red-600 p-1 transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            initIcons();
+        }
+
+        function removeLeaveRequest(id) {
+            leaveRequests = leaveRequests.filter(r => r.id !== id);
+            renderLeaveRequests();
+            showToast("已從清單移除", "info");
+        }
+
+        async function clearAllLeaves() {
+            if (leaveRequests.length === 0) return;
+            const confirmed = await customConfirm("清空確認", "確定要清空所有已加入的請假名單嗎？");
+            if (confirmed) {
+                leaveRequests = [];
+                renderLeaveRequests();
+                showToast("已清空請假教師名單", "info");
+            }
+        }
+
+        function performMatch() {
+            if (leaveRequests.length === 0) {
+                showToast("請至少加入一位請假教師！", "error");
+                return;
+            }
+
+            if (Object.keys(teachersData).length === 0) {
+                showToast("尚未上傳或載入課表，無法進行比對！", "error");
+                return;
+            }
+
+            const loader = document.getElementById('loader');
+            document.getElementById('loaderText').innerText = `正在交叉比對 ${leaveRequests.length} 位請假教師之課表...`;
+            loader.classList.remove('hidden');
+
+            setTimeout(() => {
+                const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
+                let allMatches = [];
+
+                // 建立「特定日期 請假的全部老師集合」：用於衝突排除
+                // 日期 (YYYY-MM-DD) -> Set of teacher names absent on that date
+                const absentByDate = {};
+
+                leaveRequests.forEach(req => {
+                    const start = new Date(req.startDate);
+                    const end = new Date(req.endDate);
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        const iso = d.toISOString().split('T')[0];
+                        if (!absentByDate[iso]) absentByDate[iso] = new Set();
+                        absentByDate[iso].add(req.teacher);
+                    }
+                });
+
+                // 針對每一張請假申請進行課表展開
+                leaveRequests.forEach(req => {
+                    const absentTeacher = req.teacher;
+                    const teacherSched = teachersData[absentTeacher];
+                    if (!teacherSched) return;
+
+                    const start = new Date(req.startDate);
+                    const end = new Date(req.endDate);
+
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        const currentD = new Date(d);
+                        const dayIdx = currentD.getDay();
+                        if (dayIdx === 0) continue; // 略過星期天
+
+                        const dayStr = "星期" + dayNames[dayIdx];
+                        const isoDate = currentD.toISOString().split('T')[0];
+                        const dateDisplay = currentD.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + ` (${dayStr})`;
+
+                        // 當天所有請假老師名單
+                        const absentTeachersOnThisDay = absentByDate[isoDate] || new Set([absentTeacher]);
+
+                        // 遍歷該星期的所有節次
+                        timeSlots.filter(ts => ts.startsWith(dayStr)).forEach(slot => {
+                            const cellContent = teacherSched[slot];
+                            if (cellContent && cellContent.trim() !== "") {
+                                const match = cellContent.match(/(.+)\s*\((.+)\)/);
+                                const subject = match ? match[1].trim() : cellContent;
+                                const className = match ? match[2].trim() : "";
+
+                                // 尋找代課人選，自動排除當天所有請假老師
+                                const candidates = findRealCandidates(absentTeacher, className, subject, slot, absentTeachersOnThisDay);
+
+                                allMatches.push({
+                                    id: 'm_' + Math.random().toString(36).substr(2, 6),
+                                    absentTeacher: absentTeacher,
+                                    date: dateDisplay,
+                                    isoDate: isoDate,
+                                    slot: slot.replace(dayStr + " ", ""),
+                                    fullSlot: slot,
+                                    className: className || "未知班級",
+                                    subject: subject,
+                                    candidates: candidates
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // 排序：先按日期、再按節次、再按請假老師
+                allMatches.sort((a, b) => {
+                    if (a.isoDate !== b.isoDate) return a.isoDate.localeCompare(b.isoDate);
+                    if (a.slot !== b.slot) return a.slot.localeCompare(b.slot, undefined, { numeric: true });
+                    return a.absentTeacher.localeCompare(b.absentTeacher, 'zh-TW');
+                });
+
+                currentMatches = allMatches;
+                activeFilterTeacher = 'ALL';
+                renderResults();
+                loader.classList.add('hidden');
+                showToast(`智慧媒合完成！共計 ${currentMatches.length} 節課需安排代課。`, "success");
+            }, 400);
+        }
+
+        function findRealCandidates(absentT, targetClass, targetSubject, slot, allAbsentTeachersOnDate) {
+            let p1 = [], p2 = [], p3 = [];
+
+            Object.keys(teachersData).forEach(t => {
+                // 核心防呆：該名老師若也在當天請假名單中，絕不作為代課人選！
+                if (allAbsentTeachersOnDate.has(t)) return;
+
+                const sched = teachersData[t][slot];
+                // 檢查該時段是否為空堂
+                if (!sched || sched.trim() === "") {
+                    let isSameClass = false;
+                    let isSameSubject = false;
+
+                    // 檢查全週課表
+                    Object.values(teachersData[t]).forEach(val => {
+                        if (val) {
+                            if (targetClass && val.includes(`(${targetClass})`)) isSameClass = true;
+                            if (targetSubject && val.includes(targetSubject)) isSameSubject = true;
+                        }
+                    });
+
+                    if (isSameClass && isSameSubject) {
+                        p1.push(t);
+                    } else if (isSameClass) {
+                        p2.push(t);
+                    } else {
+                        p3.push(t);
+                    }
+                }
+            });
+
+            return { p1, p2, p3 };
+        }
+
+        function renderResults() {
+            const body = document.getElementById('resultBody');
+            const empty = document.getElementById('emptyState');
+            const wrapper = document.getElementById('tableWrapper');
+            const footer = document.getElementById('actionFooter');
+            const count = document.getElementById('resultCount');
+            const filterBar = document.getElementById('filterBar');
+            const filterPills = document.getElementById('filterPills');
+
+            body.innerHTML = '';
+
+            if (currentMatches.length === 0) {
+                empty.classList.remove('hidden');
+                wrapper.classList.add('hidden');
+                footer.classList.add('hidden');
+                filterBar.classList.add('hidden');
+                count.classList.add('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            wrapper.classList.remove('hidden');
+            footer.classList.remove('hidden');
+            count.classList.remove('hidden');
+            filterBar.classList.remove('hidden');
+
+            // 建立教師篩選按鈕
+            const teacherSet = new Set(currentMatches.map(m => m.absentTeacher));
+            filterPills.innerHTML = '';
+            
+            // "全部" 標籤
+            const allBtn = document.createElement('button');
+            allBtn.className = `px-2.5 py-1 rounded-full text-xs font-bold transition ${activeFilterTeacher === 'ALL' ? 'bg-blue-800 text-white shadow-sm' : 'bg-white border text-slate-600 hover:bg-slate-100'}`;
+            allBtn.innerText = `全部 (${currentMatches.length})`;
+            allBtn.onclick = () => { activeFilterTeacher = 'ALL'; renderResults(); };
+            filterPills.appendChild(allBtn);
+
+            teacherSet.forEach(tName => {
+                const countForT = currentMatches.filter(m => m.absentTeacher === tName).length;
+                const color = getTeacherColor(tName);
+                const btn = document.createElement('button');
+                const isSelected = activeFilterTeacher === tName;
+                btn.className = `px-2.5 py-1 rounded-full text-xs font-semibold transition border`;
+                btn.style.backgroundColor = isSelected ? color.text : 'white';
+                btn.style.color = isSelected ? 'white' : color.text;
+                btn.style.borderColor = color.border;
+                btn.innerText = `${tName} (${countForT})`;
+                btn.onclick = () => { activeFilterTeacher = tName; renderResults(); };
+                filterPills.appendChild(btn);
+            });
+
+            // 依篩選過濾資料
+            const displayedMatches = activeFilterTeacher === 'ALL' 
+                ? currentMatches 
+                : currentMatches.filter(m => m.absentTeacher === activeFilterTeacher);
+
+            count.innerText = `共 ${currentMatches.length} 節課需代課 (目前顯示: ${displayedMatches.length} 節)`;
+
+            displayedMatches.forEach(match => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-blue-50/40 transition-colors border-b last:border-0";
+                
+                const tColor = getTeacherColor(match.absentTeacher);
+                const teacherBadge = `
+                    <span class="inline-block px-2 py-0.5 rounded-md font-bold text-xs shadow-xs" 
+                          style="background-color: ${tColor.bg}; color: ${tColor.text}; border: 1px solid ${tColor.border}">
+                        ${match.absentTeacher}
+                    </span>
+                `;
+
+                const c1 = match.candidates.p1.map(n => `<span class="tag-p1 px-2 py-0.5 rounded text-xs mr-1 mb-1 inline-block shadow-xs" title="同班級且教授同科目">${n}</span>`).join('');
+                const c2 = match.candidates.p2.map(n => `<span class="tag-p2 px-2 py-0.5 rounded text-xs mr-1 mb-1 inline-block shadow-xs" title="該班級之其他任課老師">${n}</span>`).join('');
+                const c3 = match.candidates.p3.slice(0, 7).map(n => `<span class="tag-p3 px-2 py-0.5 rounded text-xs mr-1 mb-1 inline-block">${n}</span>`).join('');
+                const c3More = match.candidates.p3.length > 7 ? `<span class="text-[10px] text-slate-400 self-center">+${match.candidates.p3.length - 7}位</span>` : '';
+
+                row.innerHTML = `
+                    <td class="px-3.5 py-3 whitespace-nowrap align-top">${teacherBadge}</td>
+                    <td class="px-3 py-3 text-slate-600 font-medium whitespace-nowrap align-top text-xs">${match.date}</td>
+                    <td class="px-2 py-3 font-bold text-slate-800 whitespace-nowrap align-top text-xs">${match.slot}</td>
+                    <td class="px-3 py-3 align-top whitespace-nowrap">
+                        <div class="font-bold text-blue-900 text-xs">${match.className}</div>
+                        <div class="text-[11px] text-slate-500 font-medium">${match.subject}</div>
+                    </td>
+                    <td class="px-4 py-3 align-top">
+                        <div class="flex flex-wrap items-center">
+                            ${c1} ${c2}
+                            ${(c1 || c2) && c3 ? '<div class="w-full my-1 border-t border-slate-100"></div>' : ''}
+                            ${c3} ${c3More}
+                            ${!c1 && !c2 && !c3 ? '<span class="text-xs text-red-400 italic">該時段全校查無空堂老師</span>' : ''}
+                        </div>
+                    </td>
+                `;
+                body.appendChild(row);
+            });
+
+            initIcons();
+        }
+
+        function downloadResults() {
+            if (!currentMatches.length) {
+                showToast("目前沒有可匯出的媒合資料！", "error");
+                return;
+            }
+
+            const exportData = currentMatches.map(m => ({
+                "請假教師": m.absentTeacher,
+                "日期": m.isoDate,
+                "顯示日期": m.date,
+                "節次": m.slot,
+                "班級": m.className,
+                "科目": m.subject,
+                "優先推薦 (同班同科)": m.candidates.p1.join(', ') || '無',
+                "次要推薦 (同班老師)": m.candidates.p2.join(', ') || '無',
+                "其他無堂教師": m.candidates.p3.slice(0, 15).join(', ') || '無'
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "排代建議總表");
+
+            // 針對每位請假老師各額外輸出獨立工作表
+            const teacherSet = Array.from(new Set(currentMatches.map(m => m.absentTeacher)));
+            teacherSet.forEach(tName => {
+                const subData = exportData.filter(d => d["請假教師"] === tName);
+                const subSheet = XLSX.utils.json_to_sheet(subData);
+                // Sheet 名稱限制在 31 字元內
+                const cleanSheetName = tName.substring(0, 30);
+                XLSX.utils.book_append_sheet(workbook, subSheet, cleanSheetName);
+            });
+
+            const fileName = `智慧代課媒合總表_${teacherSet.join('_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+            showToast(`已順利匯出排代建議 Excel！`, "success");
+        }
+    </script>
+</body>
+</html>
